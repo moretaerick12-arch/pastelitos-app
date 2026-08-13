@@ -18,6 +18,8 @@ export interface MapMarker {
   lng: number;
   title: string;
   subtitle?: string;
+  color?: string;
+  number?: number;
 }
 
 interface MapProps {

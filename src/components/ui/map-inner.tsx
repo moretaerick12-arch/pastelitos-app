@@ -5,8 +5,8 @@ import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaf
 import L from "leaflet";
 import { MapMarker } from "./map";
 
-// Fix default icons for Leaflet in Next.js
-const customIcon = L.icon({
+// Default icon fallback
+const defaultIcon = L.icon({
   iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
   iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
@@ -15,6 +15,16 @@ const customIcon = L.icon({
   popupAnchor: [1, -34],
   shadowSize: [41, 41]
 });
+
+const createCustomIcon = (number?: number, colorClass: string = "bg-amber-500") => {
+  return L.divIcon({
+    html: `<div class='${colorClass} text-white rounded-full w-8 h-8 flex items-center justify-center font-bold shadow-md border-2 border-white text-sm'>${number || ''}</div>`,
+    className: 'custom-div-icon',
+    iconSize: [32, 32],
+    iconAnchor: [16, 32],
+    popupAnchor: [0, -32],
+  });
+};
 
 interface MapInnerProps {
   markers: MapMarker[];
@@ -66,7 +76,7 @@ export default function MapInner({ markers, className = "h-[400px] w-full rounde
           <Marker 
             key={marker.id} 
             position={[marker.lat, marker.lng]}
-            icon={customIcon}
+            icon={marker.color || marker.number ? createCustomIcon(marker.number, marker.color) : defaultIcon}
           >
             <Popup>
               <div className="font-sans">

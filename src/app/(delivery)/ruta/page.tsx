@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase/client';
-import { CheckCircle2, Circle, MapPin, Package, DownloadCloud, RefreshCw } from 'lucide-react';
+import { CheckCircle2, MapPin, Package, DownloadCloud, RefreshCw, GripVertical, Navigation } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { db } from '@/lib/db';
 import { SyncManager } from '@/lib/sync/syncManager';
 import { useLiveQuery } from 'dexie-react-hooks';
@@ -120,6 +121,24 @@ export default function RutaPage() {
     }
   };
 
+  const onDragEnd = async (result: DropResult) => {
+    if (!result.destination) return;
+    const sourceIndex = result.source.index;
+    const destinationIndex = result.destination.index;
+    if (sourceIndex === destinationIndex) return;
+    
+    const newClients = [...clients];
+    const [removed] = newClients.splice(sourceIndex, 1);
+    newClients.splice(destinationIndex, 0, removed);
+    
+    const updatedClients = newClients.map((client, index) => ({
+      ...client,
+      visit_order: index + 1
+    }));
+    
+    await db.local_clients.bulkPut(updatedClients);
+  };
+
   const visitedCount = clients.filter(c => c.visited).length;
   const progressPercent = clients.length > 0 ? Math.round((visitedCount / clients.length) * 100) : 0;
 
@@ -210,7 +229,9 @@ export default function RutaPage() {
             lat: c.lat!,
             lng: c.lng!,
             title: c.name,
-            subtitle: c.address || 'Sin dirección'
+            subtitle: c.address || 'Sin dirección',
+            number: c.visit_order,
+            color: c.visited ? 'bg-slate-400' : 'bg-amber-500'
           }));
         
         if (mapMarkers.length === 0) return null;
@@ -242,39 +263,75 @@ export default function RutaPage() {
           <div className="bg-amber-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
         </div>
 
-        <div className="flex flex-col gap-3 pb-6">
-          {clients.map((rc) => (
-            <div 
-              key={rc.id} 
-              className={`bg-white rounded-xl p-4 shadow-sm border transition-all flex items-start gap-3 ${rc.visited ? 'border-slate-100 opacity-60' : 'border-slate-200'}`}
-            >
-              <div className="flex-shrink-0 mt-0.5">
-                {rc.visited ? (
-                  <CheckCircle2 size={22} className="text-green-500" />
-                ) : (
-                  <div className="w-[22px] h-[22px] rounded-full border-2 border-amber-400 flex items-center justify-center text-[10px] font-bold text-amber-600">
-                    {rc.visit_order}
+        <DragDropContext onDragEnd={onDragEnd}>
+          <Droppable droppableId="clients">
+            {(provided) => (
+              <div 
+                className="flex flex-col gap-3 pb-6"
+                {...provided.droppableProps}
+                ref={provided.innerRef}
+              >
+                {clients.map((rc, index) => (
+                  <Draggable key={rc.id} draggableId={rc.id} index={index}>
+                    {(provided, snapshot) => (
+                      <div 
+                        ref={provided.innerRef}
+                        {...provided.draggableProps}
+                        className={`bg-white rounded-xl p-4 shadow-sm border transition-all flex items-start gap-3 ${rc.visited ? 'border-slate-100 opacity-60' : 'border-slate-200'} ${snapshot.isDragging ? 'shadow-md ring-2 ring-amber-500' : ''}`}
+                      >
+                        <div 
+                          {...provided.dragHandleProps} 
+                          className="mt-0.5 text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing"
+                        >
+                          <GripVertical size={22} />
+                        </div>
+                        
+                        <div className="flex-shrink-0 mt-0.5">
+                          {rc.visited ? (
+                            <CheckCircle2 size={22} className="text-green-500" />
+                          ) : (
+                            <div className="w-[22px] h-[22px] rounded-full border-2 border-amber-400 flex items-center justify-center text-[10px] font-bold text-amber-600">
+                              {rc.visit_order}
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <h3 className={`font-semibold text-base truncate ${rc.visited ? 'text-slate-500' : 'text-slate-800'}`}>
+                            {rc.name}
+                          </h3>
+                          <p className="text-xs text-slate-500 truncate flex items-center gap-1 mt-1">
+                            <MapPin size={12} />
+                            {rc.address}
+                          </p>
+                        </div>
+
+                        {rc.lat && rc.lng && (
+                          <a
+                            href={`https://www.google.com/maps/dir/?api=1&destination=${rc.lat},${rc.lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors flex-shrink-0"
+                            onClick={(e) => e.stopPropagation()}
+                            title="Navegar"
+                          >
+                            <Navigation size={18} />
+                          </a>
+                        )}
+                      </div>
+                    )}
+                  </Draggable>
+                ))}
+                {provided.placeholder}
+                
+                {clients.length === 0 && (
+                  <div className="text-center p-6 text-sm text-slate-500 bg-white rounded-xl border border-slate-100">
+                    No hay clientes asignados a esta ruta.
                   </div>
                 )}
               </div>
-              <div className="flex-1 min-w-0">
-                <h3 className={`font-semibold text-base truncate ${rc.visited ? 'text-slate-500' : 'text-slate-800'}`}>
-                  {rc.name}
-                </h3>
-                <p className="text-xs text-slate-500 truncate flex items-center gap-1 mt-1">
-                  <MapPin size={12} />
-                  {rc.address}
-                </p>
-              </div>
-            </div>
-          ))}
-          
-          {clients.length === 0 && (
-            <div className="text-center p-6 text-sm text-slate-500 bg-white rounded-xl border border-slate-100">
-              No hay clientes asignados a esta ruta.
-            </div>
-          )}
-        </div>
+            )}
+          </Droppable>
+        </DragDropContext>
       </section>
     </div>
   );
