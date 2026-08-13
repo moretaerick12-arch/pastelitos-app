@@ -242,8 +242,21 @@ export default function RutaPage() {
               <MapPin size={16} />
               Mapa de Ruta
             </h2>
-            <div className="h-[250px] w-full rounded-xl overflow-hidden shadow-sm border border-slate-100">
-              <Map markers={mapMarkers} className="h-full w-full" zoom={14} />
+            <div className="h-[45vh] w-full rounded-xl overflow-hidden shadow-sm border border-slate-100">
+              <Map 
+                markers={mapMarkers} 
+                className="h-full w-full" 
+                zoom={14} 
+                onMarkerClick={(id) => {
+                  const element = document.getElementById(`client-${id}`);
+                  if (element) {
+                    element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    // Optional: add a temporary highlight effect
+                    element.classList.add('ring-2', 'ring-amber-500');
+                    setTimeout(() => element.classList.remove('ring-2', 'ring-amber-500'), 2000);
+                  }
+                }}
+              />
             </div>
           </section>
         );
@@ -275,6 +288,7 @@ export default function RutaPage() {
                   <Draggable key={rc.id} draggableId={rc.id} index={index}>
                     {(provided, snapshot) => (
                       <div 
+                        id={`client-${rc.id}`}
                         ref={provided.innerRef}
                         {...provided.draggableProps}
                         className={`bg-white rounded-xl p-4 shadow-sm border transition-all flex items-start gap-3 ${rc.visited ? 'border-slate-100 opacity-60' : 'border-slate-200'} ${snapshot.isDragging ? 'shadow-md ring-2 ring-amber-500' : ''}`}

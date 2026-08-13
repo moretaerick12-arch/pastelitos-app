@@ -27,8 +27,9 @@ interface MapProps {
   className?: string;
   zoom?: number;
   onClick?: (lat: number, lng: number) => void;
+  onMarkerClick?: (id: string) => void;
 }
 
-export function Map({ markers, className, zoom = 13, onClick }: MapProps) {
-  return <MapInner markers={markers} className={className} zoom={zoom} onClick={onClick} />;
+export function Map({ markers, className, zoom = 13, onClick, onMarkerClick }: MapProps) {
+  return <MapInner markers={markers} className={className} zoom={zoom} onClick={onClick} onMarkerClick={onMarkerClick} />;
 }
