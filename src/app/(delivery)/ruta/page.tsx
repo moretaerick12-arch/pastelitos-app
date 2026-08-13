@@ -146,12 +146,8 @@ export default function RutaPage() {
     return (
       <div className="flex flex-col gap-4 animate-slide-up">
         {/* Default empty map */}
-        <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 h-[250px] overflow-hidden relative">
+        <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 h-[300px] overflow-hidden relative">
           <Map markers={[]} className="w-full h-full rounded-xl z-0" zoom={13} />
-          {/* Overlay to indicate it's empty */}
-          <div className="absolute inset-0 z-10 flex items-center justify-center pointer-events-none bg-white/40 backdrop-blur-[1px]">
-            <span className="bg-slate-800 text-white text-xs font-bold px-3 py-1 rounded-full shadow-lg">Ubicación Actual</span>
-          </div>
         </div>
 
         <div className="flex flex-col items-center justify-center text-center p-8 bg-white rounded-2xl shadow-sm border border-slate-100">
