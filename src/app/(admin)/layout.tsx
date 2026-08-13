@@ -45,7 +45,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       `}>
         <div className="flex items-center justify-between p-4 border-b border-white/10 h-16">
           <span className="text-xl font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
-            Pastelistos Patria
+            Pastelitos Patria
           </span>
           <button 
             className="md:hidden text-gray-400 hover:text-white"

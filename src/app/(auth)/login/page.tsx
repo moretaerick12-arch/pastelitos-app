@@ -71,7 +71,7 @@ export default function LoginPage() {
     <div className="backdrop-blur-xl bg-white/70 dark:bg-slate-900/80 rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] border border-white/20 dark:border-slate-700/50 p-8 w-full transition-all duration-300">
       <div className="text-center mb-8">
         <h1 className="text-3xl font-extrabold tracking-tight text-amber-600 dark:text-amber-500 mb-2 flex items-center justify-center gap-2">
-          Pastelistos Patria 🥟
+          Pastelitos Patria 🥟
         </h1>
         <p className="text-slate-500 dark:text-slate-400 text-sm">
           Ingresa tus credenciales para continuar

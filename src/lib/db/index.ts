@@ -67,7 +67,7 @@ export class AppDatabase extends Dexie {
   meta!: Table<{ key: string; value: any }, string>;
 
   constructor() {
-    super('PastelistosPatriaDB');
+    super('PastelitosPatriaDB');
     
     // Define tables and indexes
     this.version(1).stores({

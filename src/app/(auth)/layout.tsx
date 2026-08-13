@@ -1,8 +1,8 @@
 import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
-  title: 'Pastelistos Patria - Acceso',
-  description: 'Inicia sesión en Pastelistos Patria',
+  title: 'Pastelitos Patria - Acceso',
+  description: 'Inicia sesión en Pastelitos Patria',
 }
 
 export default function AuthLayout({
