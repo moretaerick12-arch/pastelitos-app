@@ -85,6 +85,7 @@ interface MapInnerProps {
   osrmRoute?: [number, number][];
   centerOnUserTrigger?: number;
   fitBoundsTrigger?: number;
+  mapType?: 'streets' | 'satellite';
 }
 
 function MapEvents({ onClick }: { onClick?: (lat: number, lng: number) => void }) {
@@ -173,7 +174,8 @@ export default function MapInner({
   onMarkerClick, 
   osrmRoute,
   centerOnUserTrigger,
-  fitBoundsTrigger
+  fitBoundsTrigger,
+  mapType = 'streets'
 }: MapInnerProps) {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
@@ -223,10 +225,21 @@ export default function MapInner({
         style={{ height: "100%", width: "100%", minHeight: "420px", zIndex: 0 }}
         className="rounded-2xl overflow-hidden"
       >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
+        {mapType === 'satellite' ? (
+          <TileLayer
+            key="satellite-layer"
+            attribution='Tiles &copy; Esri &mdash; Source: Esri, i-cubed, USDA, USGS, AEX, GeoEye, Getmapping, Aerogrid, IGN, IGP, UPR-EGP, and the GIS User Community'
+            url="https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"
+            maxZoom={19}
+          />
+        ) : (
+          <TileLayer
+            key="streets-layer"
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            maxZoom={19}
+          />
+        )}
         
         <MapEvents onClick={onClick} />
         

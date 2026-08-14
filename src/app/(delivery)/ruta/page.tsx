@@ -23,7 +23,13 @@ import {
   X,
   AlertCircle,
   Sparkles,
-  Layers
+  Layers,
+  Search,
+  ChevronUp,
+  ChevronDown,
+  ArrowRight,
+  Route as RouteIcon,
+  Check
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { db } from '@/lib/db';
@@ -35,13 +41,15 @@ export default function RutaPage() {
   const router = useRouter();
   const [downloading, setDownloading] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [activeTab, setActiveTab] = useState<'mapa' | 'lista'>('mapa');
-  
   const [mounted, setMounted] = useState(false);
   useEffect(() => setMounted(true), []);
 
-  // Filter states
+  // Map & View states
+  const [mapType, setMapType] = useState<'streets' | 'satellite'>('streets');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSearching, setIsSearching] = useState(false);
   const [filterMode, setFilterMode] = useState<'all' | 'pending' | 'visited' | 'debt'>('all');
+  const [sheetExpanded, setSheetExpanded] = useState(false);
   
   // Map interactions
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
@@ -64,19 +72,43 @@ export default function RutaPage() {
     return clients.find(c => c.id === selectedClientId) || null;
   }, [selectedClientId, clients]);
 
-  // Filtered clients for map and list
+  // Next pending stop in the route
+  const nextPendingClient = useMemo(() => {
+    return clients.find(c => !c.visited && c.lat && c.lng) || null;
+  }, [clients]);
+
+  // Search filtered results for search dropdown
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim()) return [];
+    const q = searchQuery.toLowerCase();
+    return clients.filter(c => 
+      c.name.toLowerCase().includes(q) || 
+      (c.address && c.address.toLowerCase().includes(q)) ||
+      (c.phone && c.phone.includes(q))
+    ).slice(0, 5);
+  }, [clients, searchQuery]);
+
+  // Filtered clients for map markers and list
   const filteredClients = useMemo(() => {
+    let list = clients;
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase();
+      list = list.filter(c => 
+        c.name.toLowerCase().includes(q) || 
+        (c.address && c.address.toLowerCase().includes(q))
+      );
+    }
     switch (filterMode) {
       case 'pending':
-        return clients.filter(c => !c.visited);
+        return list.filter(c => !c.visited);
       case 'visited':
-        return clients.filter(c => c.visited);
+        return list.filter(c => c.visited);
       case 'debt':
-        return clients.filter(c => (c.current_balance || 0) > 0);
+        return list.filter(c => (c.current_balance || 0) > 0);
       default:
-        return clients;
+        return list;
     }
-  }, [clients, filterMode]);
+  }, [clients, filterMode, searchQuery]);
 
   // Sync handler
   const handleSync = async () => {
@@ -289,7 +321,7 @@ export default function RutaPage() {
         .single();
         
       if (!route) {
-        alert('No tienes una ruta asignada para hoy en Supabase. Puedes usar "Cargar Demo" para explorar.');
+        alert('No tienes una ruta asignada para hoy en Supabase. Puedes usar "Modo Demo" para explorar.');
         setDownloading(false);
         return;
       }
@@ -398,16 +430,6 @@ export default function RutaPage() {
     setSelectedClientId(validClients[newIndex].id);
   };
 
-  // Jump to first pending stop
-  const handleJumpToNextPending = () => {
-    const nextPending = clients.find(c => !c.visited && c.lat && c.lng);
-    if (nextPending) {
-      setSelectedClientId(nextPending.id);
-    } else if (clients.length > 0) {
-      alert('¡Has visitado a todos los clientes de la ruta!');
-    }
-  };
-
   const visitedCount = clients.filter(c => c.visited).length;
   const progressPercent = clients.length > 0 ? Math.round((visitedCount / clients.length) * 100) : 0;
   const debtClientsCount = clients.filter(c => (c.current_balance || 0) > 0).length;
@@ -431,217 +453,380 @@ export default function RutaPage() {
   }, [filteredClients]);
 
   return (
-    <div className="relative w-full h-[calc(100vh-145px)] min-h-[560px] overflow-hidden flex flex-col bg-slate-100">
+    <div className="relative w-full h-[calc(100vh-140px)] min-h-[580px] overflow-hidden flex flex-col bg-slate-100 select-none">
       
       {/* ========================================================= */}
-      {/* VISTA MAPA: EDGE-TO-EDGE FULL IMMERSIVE VIEW             */}
+      {/* FULL EDGE-TO-EDGE GOOGLE MAPS CANVAS                     */}
       {/* ========================================================= */}
-      {activeTab === 'mapa' && (
-        <div className="relative w-full h-full flex-1">
+      <div className="absolute inset-0 w-full h-full z-0">
+        <Map 
+          markers={mapMarkers} 
+          className="w-full h-full" 
+          zoom={14}
+          selectedMarkerId={selectedClientId}
+          onMarkerClick={(id) => {
+            setSelectedClientId(id);
+            setSheetExpanded(false);
+          }}
+          osrmRoute={osrmRoute}
+          centerOnUserTrigger={centerOnUserTrigger}
+          fitBoundsTrigger={fitBoundsTrigger}
+          mapType={mapType}
+        />
+      </div>
+
+      {/* ========================================================= */}
+      {/* TOP FLOATING OVERLAYS: GOOGLE MAPS SEARCH & FILTERS       */}
+      {/* ========================================================= */}
+      <div className="absolute top-3 left-3 right-3 z-[1000] flex flex-col gap-2 pointer-events-none">
+        
+        {/* Google Maps Capsule Search Bar */}
+        <div className="bg-white/95 backdrop-blur-md rounded-2xl shadow-[0_8px_30px_rgb(0,0,0,0.14)] border border-slate-200/90 flex items-center px-3.5 py-2 pointer-events-auto transition-all">
+          <Search size={18} className="text-amber-500 shrink-0 mr-2.5" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => setIsSearching(true)}
+            placeholder="Buscar colmado, cliente o calle..."
+            className="w-full bg-transparent text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none"
+          />
           
-          {/* Full Screen Edge-to-Edge Leaflet Canvas */}
-          <div className="absolute inset-0 w-full h-full z-0">
-            <Map 
-              markers={mapMarkers} 
-              className="w-full h-full" 
-              zoom={14}
-              selectedMarkerId={selectedClientId}
-              onMarkerClick={(id) => setSelectedClientId(id)}
-              osrmRoute={osrmRoute}
-              centerOnUserTrigger={centerOnUserTrigger}
-              fitBoundsTrigger={fitBoundsTrigger}
-            />
-          </div>
+          {searchQuery ? (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="p-1 text-slate-400 hover:text-slate-600 rounded-full mr-1"
+            >
+              <X size={16} />
+            </button>
+          ) : null}
 
-          {/* Floating Top Floating Header: Mode Switcher & Sync */}
-          <div className="absolute top-3 left-3 right-3 z-[1000] flex flex-col gap-2 pointer-events-none">
+          {/* Top Quick Actions (Demo & Sync) */}
+          <div className="flex items-center gap-1.5 pl-2 border-l border-slate-200">
+            <button
+              onClick={toggleDemoMode}
+              className={`flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1.5 rounded-xl transition-all active:scale-95 border ${
+                mounted && isDemoActive 
+                  ? 'bg-rose-500 text-white border-rose-400' 
+                  : 'bg-amber-500 text-white border-amber-400/80 shadow-sm'
+              }`}
+              title={mounted && isDemoActive ? 'Desactivar Modo Demo' : 'Activar Modo Demo'}
+            >
+              <Sparkles size={12} />
+              <span>{mounted && isDemoActive ? 'Salir' : 'Demo'}</span>
+            </button>
             
-            {/* Top Row: Floating Tab Switcher + Quick Actions */}
-            <div className="flex items-center justify-between gap-2 pointer-events-auto">
-              
-              {/* Glassmorphic Segmented Control */}
-              <div className="flex bg-slate-900/85 backdrop-blur-md p-1 rounded-2xl shadow-xl border border-white/10">
-                <button 
-                  onClick={() => setActiveTab('mapa')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
-                    activeTab === 'mapa' 
-                      ? 'bg-amber-500 text-white shadow-md' 
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  <MapPin size={14} />
-                  <span>Mapa ({mapMarkers.length})</span>
-                </button>
-                <button 
-                  onClick={() => setActiveTab('lista')}
-                  className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all flex items-center gap-1.5 ${
-                    activeTab === 'lista' 
-                      ? 'bg-amber-500 text-white shadow-md' 
-                      : 'text-slate-300 hover:text-white'
-                  }`}
-                >
-                  <GripVertical size={14} />
-                  <span>Lista ({clients.length})</span>
-                </button>
-              </div>
+            <button 
+              onClick={handleSync}
+              disabled={syncing}
+              className="p-1.5 text-slate-600 hover:text-slate-900 bg-slate-100 hover:bg-slate-200 rounded-xl transition-all disabled:opacity-50 active:scale-95"
+              title="Sincronizar ruta"
+            >
+              <RefreshCw size={15} className={syncing ? 'animate-spin text-amber-500' : ''} />
+            </button>
+          </div>
+        </div>
 
-              {/* Top Right Action Pills */}
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={toggleDemoMode}
-                  className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-2xl shadow-xl transition-all active:scale-95 border ${
-                    mounted && isDemoActive 
-                      ? 'bg-rose-500 hover:bg-rose-600 text-white border-rose-400' 
-                      : 'bg-amber-500 hover:bg-amber-600 text-white border-amber-400/50'
-                  }`}
-                  title={mounted && isDemoActive ? 'Desactivar Modo Demo y limpiar datos' : 'Activar Modo Demo para explorar'}
-                >
-                  <Sparkles size={14} />
-                  <span>{mounted && isDemoActive ? 'Salir Demo' : 'Modo Demo'}</span>
-                </button>
-                
-                <button 
-                  onClick={handleSync}
-                  disabled={syncing}
-                  className="flex items-center justify-center p-2.5 bg-slate-900/85 hover:bg-slate-900 text-white rounded-2xl shadow-xl border border-white/10 active:scale-95 transition-all disabled:opacity-50"
-                  title="Sincronizar ruta con servidor"
-                >
-                  <RefreshCw size={15} className={syncing ? 'animate-spin text-amber-400' : 'text-slate-300'} />
-                </button>
-              </div>
-            </div>
-
-            {/* Route Stats & Next Stop Button (Floating HUD) */}
-            {routeMeta && (
-              <div className="flex items-center justify-between gap-2 pointer-events-auto animate-fade-in">
-                <div className="bg-slate-900/90 backdrop-blur-md text-white px-3.5 py-1.5 rounded-xl shadow-lg border border-slate-700/60 flex items-center gap-2">
-                  <Compass size={14} className="text-amber-400 shrink-0" />
-                  <span className="text-xs font-bold text-amber-300">{(routeMeta.distance / 1000).toFixed(1)} km</span>
-                  <span className="text-slate-500 text-xs">•</span>
-                  <span className="text-xs font-medium text-slate-200">~{Math.round(routeMeta.duration / 60)} min</span>
-                  <span className="text-slate-500 text-xs">•</span>
-                  <span className="text-[11px] font-semibold text-emerald-400">{visitedCount}/{clients.length}</span>
+        {/* Live Search Suggestions Dropdown */}
+        {searchQuery.trim() && searchResults.length > 0 && (
+          <div className="bg-white/98 backdrop-blur-md rounded-2xl shadow-2xl border border-slate-200 p-1.5 flex flex-col gap-1 pointer-events-auto max-h-56 overflow-y-auto animate-slide-up">
+            {searchResults.map(c => (
+              <button
+                key={c.id}
+                onClick={() => {
+                  setSelectedClientId(c.id);
+                  setSearchQuery('');
+                  setIsSearching(false);
+                }}
+                className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-50 transition-colors text-left"
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center font-bold text-xs shrink-0">
+                    #{c.visit_order}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="font-bold text-slate-800 text-xs truncate">{c.name}</p>
+                    <p className="text-[10px] text-slate-400 truncate">{c.address}</p>
+                  </div>
                 </div>
-
-                <button
-                  onClick={handleJumpToNextPending}
-                  className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold text-xs px-3.5 py-1.5 rounded-xl shadow-lg border border-amber-400/80 flex items-center gap-1.5 transition-all ml-auto shrink-0"
-                >
-                  <span>⚡</span>
-                  <span>Siguiente Parada</span>
-                </button>
-              </div>
-            )}
-
-            {/* Filter Chips Bar (when clients exist) */}
-            {clients.length > 0 && (
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 pointer-events-auto">
-                <button
-                  onClick={() => setFilterMode('all')}
-                  className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap shadow-md transition-all ${
-                    filterMode === 'all' 
-                      ? 'bg-slate-900 text-white ring-2 ring-slate-900' 
-                      : 'bg-white/95 backdrop-blur text-slate-700 hover:bg-white'
-                  }`}
-                >
-                  Todos ({clients.length})
-                </button>
-                <button
-                  onClick={() => setFilterMode('pending')}
-                  className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap shadow-md transition-all ${
-                    filterMode === 'pending' 
-                      ? 'bg-amber-500 text-white ring-2 ring-amber-400' 
-                      : 'bg-white/95 backdrop-blur text-amber-700 hover:bg-white'
-                  }`}
-                >
-                  Pendientes ({clients.filter(c => !c.visited).length})
-                </button>
-                <button
-                  onClick={() => setFilterMode('visited')}
-                  className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap shadow-md transition-all ${
-                    filterMode === 'visited' 
-                      ? 'bg-emerald-600 text-white ring-2 ring-emerald-400' 
-                      : 'bg-white/95 backdrop-blur text-emerald-700 hover:bg-white'
-                  }`}
-                >
-                  Visitados ({visitedCount})
-                </button>
-                {debtClientsCount > 0 && (
-                  <button
-                    onClick={() => setFilterMode('debt')}
-                    className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap shadow-md transition-all ${
-                      filterMode === 'debt' 
-                        ? 'bg-rose-600 text-white ring-2 ring-rose-400' 
-                        : 'bg-white/95 backdrop-blur text-rose-700 hover:bg-white'
-                    }`}
-                  >
-                    Con Deuda ({debtClientsCount})
-                  </button>
+                {c.visited ? (
+                  <CheckCircle2 size={15} className="text-emerald-500 shrink-0 ml-2" />
+                ) : (
+                  <ArrowRight size={15} className="text-slate-400 shrink-0 ml-2" />
                 )}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Turn-by-Turn Navigation Header Banner (Google Maps Nav style) */}
+        {nextPendingClient && (
+          <div 
+            onClick={() => setSelectedClientId(nextPendingClient.id)}
+            className="bg-slate-900/95 backdrop-blur-md text-white rounded-2xl px-3.5 py-2.5 shadow-xl border border-slate-700/80 flex items-center justify-between pointer-events-auto cursor-pointer active:scale-[0.99] transition-all"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-xl bg-emerald-500 text-white flex items-center justify-center font-black text-sm shrink-0 shadow-md">
+                <Navigation size={17} className="transform rotate-45" />
               </div>
-            )}
-          </div>
-
-          {/* Floating Right Map Controller Actions */}
-          <div className="absolute right-3 bottom-24 z-[1000] flex flex-col gap-2">
-            <button
-              onClick={() => setCenterOnUserTrigger(prev => prev + 1)}
-              className="p-3 bg-white/95 hover:bg-white text-blue-600 rounded-2xl shadow-xl border border-slate-200 transition-all active:scale-95"
-              title="Mi ubicación GPS actual"
-            >
-              <Crosshair size={20} />
-            </button>
-            <button
-              onClick={() => setFitBoundsTrigger(prev => prev + 1)}
-              className="p-3 bg-white/95 hover:bg-white text-slate-800 rounded-2xl shadow-xl border border-slate-200 transition-all active:scale-95"
-              title="Ver toda la ruta"
-            >
-              <Maximize2 size={20} />
-            </button>
-          </div>
-
-          {/* Non-blocking Floating Bottom Banner when no local route */}
-          {isOfflineEmpty && (
-            <div className="absolute bottom-4 left-3 right-3 z-[1000] bg-white/98 backdrop-blur-md rounded-2xl p-4 shadow-2xl border border-slate-200 animate-slide-up">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center shrink-0 font-bold">
-                  📍
-                </span>
-                <div>
-                  <h3 className="font-bold text-slate-800 text-xs">Sin ruta activa cargada</h3>
-                  <p className="text-[11px] text-slate-500">Carga colmados de prueba para explorar o descarga tu ruta asignada.</p>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[10px] uppercase tracking-wider font-extrabold text-emerald-400">Próxima Parada</span>
+                  <span className="text-[10px] text-slate-400">• Parada #{nextPendingClient.visit_order}</span>
                 </div>
-              </div>
-              <div className="grid grid-cols-2 gap-2 mt-3">
-                <button
-                  onClick={toggleDemoMode}
-                  className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md shadow-amber-500/20 transition-all"
-                >
-                  <Sparkles size={14} />
-                  <span>Cargar Demo</span>
-                </button>
-                <button
-                  onClick={downloadRoute}
-                  disabled={downloading}
-                  className="bg-slate-800 hover:bg-slate-900 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-md transition-all disabled:opacity-50"
-                >
-                  {downloading ? <RefreshCw className="animate-spin" size={14} /> : <DownloadCloud size={14} />}
-                  <span>Descargar Ruta</span>
-                </button>
+                <h4 className="font-extrabold text-xs text-white truncate">{nextPendingClient.name}</h4>
               </div>
             </div>
-          )}
 
-          {/* Selected Client Bottom Drawer / Interactive Sheet */}
-          {selectedClient && !isOfflineEmpty && (
-            <div className="absolute bottom-3 left-3 right-3 z-[1000] bg-white/98 backdrop-blur-md rounded-3xl p-4 shadow-[0_15px_35px_rgba(0,0,0,0.25)] border border-slate-200/90 animate-slide-up">
+            <Link
+              href={`/sale?clientId=${nextPendingClient.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-black text-xs px-3 py-1.5 rounded-xl shadow-md flex items-center gap-1 shrink-0 ml-2"
+            >
+              <span>Vender</span>
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+        )}
+
+        {/* Filter Chips Bar */}
+        {clients.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 pointer-events-auto">
+            <button
+              onClick={() => setFilterMode('all')}
+              className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap shadow-md transition-all ${
+                filterMode === 'all' 
+                  ? 'bg-slate-900 text-white ring-2 ring-slate-900' 
+                  : 'bg-white/95 backdrop-blur text-slate-700 hover:bg-white'
+              }`}
+            >
+              Todos ({clients.length})
+            </button>
+            <button
+              onClick={() => setFilterMode('pending')}
+              className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap shadow-md transition-all ${
+                filterMode === 'pending' 
+                  ? 'bg-amber-500 text-white ring-2 ring-amber-400' 
+                  : 'bg-white/95 backdrop-blur text-amber-700 hover:bg-white'
+              }`}
+            >
+              Pendientes ({clients.filter(c => !c.visited).length})
+            </button>
+            <button
+              onClick={() => setFilterMode('visited')}
+              className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap shadow-md transition-all ${
+                filterMode === 'visited' 
+                  ? 'bg-emerald-600 text-white ring-2 ring-emerald-400' 
+                  : 'bg-white/95 backdrop-blur text-emerald-700 hover:bg-white'
+              }`}
+            >
+              Visitados ({visitedCount})
+            </button>
+            {debtClientsCount > 0 && (
+              <button
+                onClick={() => setFilterMode('debt')}
+                className={`px-3 py-1 rounded-full text-xs font-bold whitespace-nowrap shadow-md transition-all ${
+                  filterMode === 'debt' 
+                    ? 'bg-rose-600 text-white ring-2 ring-rose-400' 
+                    : 'bg-white/95 backdrop-blur text-rose-700 hover:bg-white'
+                }`}
+              >
+                Con Deuda ({debtClientsCount})
+              </button>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* ========================================================= */}
+      {/* FLOATING ACTION BUTTONS (GOOGLE MAPS RIGHT CONTROLS)      */}
+      {/* ========================================================= */}
+      <div className="absolute right-3 top-36 z-[1000] flex flex-col gap-2 pointer-events-auto">
+        {/* Layer Switcher (Streets vs Satellite) */}
+        <button
+          onClick={() => setMapType(prev => prev === 'streets' ? 'satellite' : 'streets')}
+          className={`p-2.5 rounded-2xl shadow-xl border backdrop-blur-md transition-all active:scale-90 ${
+            mapType === 'satellite' 
+              ? 'bg-amber-500 text-white border-amber-400' 
+              : 'bg-white/95 text-slate-700 border-slate-200 hover:bg-white'
+          }`}
+          title={mapType === 'streets' ? 'Cambiar a Vista Satélite' : 'Cambiar a Vista Callejera'}
+        >
+          <Layers size={18} />
+        </button>
+
+        {/* GPS Radar / Center on User */}
+        <button
+          onClick={() => setCenterOnUserTrigger(prev => prev + 1)}
+          className="p-2.5 bg-white/95 hover:bg-white text-blue-600 rounded-2xl shadow-xl border border-slate-200 transition-all active:scale-90"
+          title="Mi ubicación GPS actual"
+        >
+          <Crosshair size={18} />
+        </button>
+
+        {/* Zoom to fit entire route */}
+        <button
+          onClick={() => setFitBoundsTrigger(prev => prev + 1)}
+          className="p-2.5 bg-white/95 hover:bg-white text-slate-800 rounded-2xl shadow-xl border border-slate-200 transition-all active:scale-90"
+          title="Ver toda la ruta"
+        >
+          <Maximize2 size={18} />
+        </button>
+      </div>
+
+      {/* ========================================================= */}
+      {/* GOOGLE MAPS BOTTOM SHEET DRAWER (3-STATES)                */}
+      {/* ========================================================= */}
+      <div 
+        className={`absolute left-0 right-0 bottom-0 z-[1000] bg-white/98 backdrop-blur-md rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.18)] border-t border-slate-200/90 transition-all duration-300 flex flex-col ${
+          sheetExpanded 
+            ? 'h-[82%] max-h-[600px]' 
+            : selectedClient 
+              ? 'h-auto max-h-[340px]' 
+              : 'h-[75px]'
+        }`}
+      >
+        {/* Pull Handle Header */}
+        <div 
+          onClick={() => setSheetExpanded(!sheetExpanded)}
+          className="w-full flex flex-col items-center justify-center pt-2 pb-1.5 cursor-pointer hover:bg-slate-50 rounded-t-3xl"
+        >
+          <div className="w-10 h-1 rounded-full bg-slate-300 mb-1"></div>
+          <div className="w-full px-4 flex items-center justify-between text-xs">
+            <div className="flex items-center gap-2">
+              <span className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
+                <RouteIcon size={14} className="text-amber-500" />
+                Ruta del Día
+              </span>
+              <span className="text-[11px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200">
+                {visitedCount}/{clients.length} Paradas
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-1 text-slate-500 text-[11px] font-semibold">
+              <span>{sheetExpanded ? 'Ocultar lista' : 'Ver lista completa'}</span>
+              {sheetExpanded ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
+            </div>
+          </div>
+        </div>
+
+        {/* Daily Progress Bar */}
+        <div className="w-full px-4 pb-2">
+          <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+            <div 
+              className="bg-emerald-500 h-1.5 rounded-full transition-all duration-500" 
+              style={{ width: `${progressPercent}%` }}
+            ></div>
+          </div>
+        </div>
+
+        {/* ------------------------------------------------------------- */}
+        {/* BOTTOM SHEET CONTENT: SELECTED CLIENT DETAILS OR FULL LIST   */}
+        {/* ------------------------------------------------------------- */}
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
+          
+          {/* STATE A: EXPANDED FULL ROUTE LIST & INVENTORY */}
+          {sheetExpanded ? (
+            <div className="flex flex-col gap-4 pt-1 animate-fade-in">
+              {/* Inventory summary in sheet */}
+              <section className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
+                <h4 className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                  <Package size={14} className="text-amber-500" />
+                  Inventario en el Furgón
+                </h4>
+                <div className="flex gap-2 overflow-x-auto no-scrollbar">
+                  {inventory.map(item => (
+                    <div key={item.product_id} className="bg-white px-3 py-1.5 rounded-xl border border-slate-200 shadow-sm shrink-0">
+                      <span className="text-[10px] text-slate-500 block truncate">{item.name}</span>
+                      <span className="text-xs font-black text-slate-800">{item.quantity_dispatched} uds</span>
+                    </div>
+                  ))}
+                  {inventory.length === 0 && (
+                    <p className="text-[11px] text-slate-400 italic">Sin inventario registrado</p>
+                  )}
+                </div>
+              </section>
+
+              {/* Full Stops Sequence */}
+              <section>
+                <h4 className="text-[11px] font-bold text-slate-600 uppercase tracking-wider mb-2">
+                  Secuencia de Paradas (Arrastra para reordenar)
+                </h4>
+                
+                {isOfflineEmpty ? (
+                  <div className="text-center py-6">
+                    <p className="text-xs text-slate-500 mb-3">No hay ruta activa cargada.</p>
+                    <button
+                      onClick={toggleDemoMode}
+                      className="bg-amber-500 text-white text-xs font-bold py-2 px-4 rounded-xl shadow-md"
+                    >
+                      Cargar Ruta de Prueba
+                    </button>
+                  </div>
+                ) : (
+                  <DragDropContext onDragEnd={onDragEnd}>
+                    <Droppable droppableId="sheet-clients">
+                      {(provided) => (
+                        <div {...provided.droppableProps} ref={provided.innerRef} className="flex flex-col gap-2">
+                          {clients.map((rc, index) => (
+                            <Draggable key={rc.id} draggableId={rc.id} index={index}>
+                              {(provided, snapshot) => (
+                                <div
+                                  ref={provided.innerRef}
+                                  {...provided.draggableProps}
+                                  onClick={() => {
+                                    setSelectedClientId(rc.id);
+                                    setSheetExpanded(false);
+                                  }}
+                                  className={`bg-white rounded-xl p-2.5 border transition-all flex items-center gap-2.5 cursor-pointer ${
+                                    rc.id === selectedClientId 
+                                      ? 'border-amber-400 ring-2 ring-amber-400/40' 
+                                      : 'border-slate-200'
+                                  } ${snapshot.isDragging ? 'shadow-lg scale-102' : ''}`}
+                                >
+                                  <div {...provided.dragHandleProps} className="text-slate-300 p-1">
+                                    <GripVertical size={16} />
+                                  </div>
+                                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-black ${
+                                    rc.visited 
+                                      ? 'bg-emerald-100 text-emerald-700' 
+                                      : 'bg-amber-100 text-amber-700'
+                                  }`}>
+                                    {rc.visited ? '✓' : rc.visit_order}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-bold text-xs text-slate-800 truncate">{rc.name}</p>
+                                    <p className="text-[10px] text-slate-400 truncate">{rc.address}</p>
+                                  </div>
+                                  {rc.current_balance > 0 && (
+                                    <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">
+                                      RD$ {rc.current_balance}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </Draggable>
+                          ))}
+                          {provided.placeholder}
+                        </div>
+                      )}
+                    </Droppable>
+                  </DragDropContext>
+                )}
+              </section>
+            </div>
+          ) : selectedClient ? (
+            /* STATE B: SELECTED CLIENT CARD (GOOGLE MAPS PLACE CARD) */
+            <div className="flex flex-col gap-2.5 pt-1 animate-fade-in">
               
-              {/* Card Top Row: Order Pill, Name, Close Button */}
-              <div className="flex items-start justify-between gap-2 mb-2">
+              {/* Header: Number, Name, Debt */}
+              <div className="flex items-start justify-between gap-2">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  <span className="w-8 h-8 rounded-full bg-amber-500 text-white text-xs font-black flex items-center justify-center shrink-0 shadow-md">
-                    #{selectedClient.visit_order}
-                  </span>
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center font-black text-xs text-white shrink-0 shadow-md ${
+                    selectedClient.visited ? 'bg-emerald-600' : 'bg-amber-500'
+                  }`}>
+                    {selectedClient.visited ? '✓' : `#${selectedClient.visit_order}`}
+                  </div>
                   <div className="min-w-0">
                     <h3 className="font-extrabold text-slate-900 text-sm truncate leading-tight">
                       {selectedClient.name}
@@ -653,354 +838,137 @@ export default function RutaPage() {
                   </div>
                 </div>
 
-                {/* Status & Close */}
-                <div className="flex items-center gap-1.5 shrink-0">
-                  {selectedClient.visited ? (
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2.5 py-0.5 rounded-full flex items-center gap-1">
-                      <CheckCircle2 size={11} /> Visitado
+                <div className="flex items-center gap-1 shrink-0">
+                  {selectedClient.current_balance > 0 ? (
+                    <span className="text-[10px] font-extrabold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-full border border-rose-200">
+                      Debe RD$ {selectedClient.current_balance.toLocaleString('es-DO')}
                     </span>
                   ) : (
-                    <span className="text-[10px] font-bold text-amber-700 bg-amber-100 px-2.5 py-0.5 rounded-full">
-                      Pendiente
+                    <span className="text-[10px] font-extrabold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-200">
+                      Al día
                     </span>
                   )}
                   <button 
-                    type="button"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      setSelectedClientId(null);
-                    }}
-                    className="text-slate-400 hover:text-slate-700 hover:bg-slate-100 p-1.5 rounded-full transition-colors active:scale-90"
-                    aria-label="Cerrar tarjeta"
+                    onClick={() => setSelectedClientId(null)}
+                    className="text-slate-400 hover:text-slate-700 p-1 rounded-full transition-colors"
                   >
-                    <X size={18} />
+                    <X size={16} />
                   </button>
                 </div>
               </div>
 
-              {/* Financial Status Banner */}
-              {selectedClient.current_balance > 0 ? (
-                <div className="flex items-center justify-between bg-rose-50 border border-rose-100 rounded-xl px-3 py-1.5 mb-3 text-xs">
-                  <span className="font-medium text-rose-700 flex items-center gap-1">
-                    <AlertCircle size={13} /> Deuda pendiente:
-                  </span>
-                  <span className="font-extrabold text-rose-800">
-                    RD$ {selectedClient.current_balance.toLocaleString('es-DO')}
-                  </span>
-                </div>
-              ) : (
-                <div className="flex items-center justify-between bg-emerald-50 border border-emerald-100 rounded-xl px-3 py-1 mb-3 text-[11px]">
-                  <span className="font-medium text-emerald-700">Estado de cuenta:</span>
-                  <span className="font-bold text-emerald-800">Al día (RD$ 0.00)</span>
-                </div>
-              )}
-
-              {/* Action Buttons Grid */}
-              <div className="grid grid-cols-3 gap-2 mb-2.5">
-                {/* Sale Button */}
+              {/* 4 Google Maps Action Buttons */}
+              <div className="grid grid-cols-4 gap-2 pt-1">
+                {/* Vender */}
                 <Link
                   href={`/sale?clientId=${selectedClient.id}`}
-                  className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold py-2.5 px-2 rounded-2xl text-xs flex flex-col items-center justify-center gap-1 shadow-md shadow-amber-500/20 transition-all text-center"
+                  className="bg-amber-500 hover:bg-amber-600 active:scale-95 text-white font-bold py-2 px-1 rounded-2xl text-xs flex flex-col items-center justify-center gap-1 shadow-md shadow-amber-500/20 transition-all text-center"
                 >
-                  <ShoppingCart size={17} />
+                  <ShoppingCart size={16} />
                   <span>Vender</span>
                 </Link>
 
-                {/* Collection Button */}
+                {/* Cobrar */}
                 {selectedClient.current_balance > 0 ? (
                   <Link
                     href={`/collection?clientId=${selectedClient.id}`}
-                    className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold py-2.5 px-2 rounded-2xl text-xs flex flex-col items-center justify-center gap-1 shadow-md shadow-emerald-600/20 transition-all text-center"
+                    className="bg-emerald-600 hover:bg-emerald-700 active:scale-95 text-white font-bold py-2 px-1 rounded-2xl text-xs flex flex-col items-center justify-center gap-1 shadow-md shadow-emerald-600/20 transition-all text-center"
                   >
-                    <Wallet size={17} />
+                    <Wallet size={16} />
                     <span>Cobrar</span>
                   </Link>
                 ) : (
                   <button
                     disabled
-                    className="bg-slate-100 text-slate-400 font-bold py-2.5 px-2 rounded-2xl text-xs flex flex-col items-center justify-center gap-1 cursor-not-allowed opacity-60 text-center"
+                    className="bg-slate-100 text-slate-400 font-semibold py-2 px-1 rounded-2xl text-xs flex flex-col items-center justify-center gap-1 cursor-not-allowed opacity-60 text-center"
                   >
-                    <Wallet size={17} />
+                    <Wallet size={16} />
                     <span>Sin Deuda</span>
                   </button>
                 )}
 
-                {/* GPS Navigation Button (Google Maps) */}
+                {/* Navegar */}
                 {selectedClient.lat && selectedClient.lng ? (
                   <a
                     href={`https://www.google.com/maps/dir/?api=1&destination=${selectedClient.lat},${selectedClient.lng}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 font-bold py-2.5 px-2 rounded-2xl text-xs flex flex-col items-center justify-center gap-1 border border-indigo-200 transition-all text-center"
+                    className="bg-indigo-50 hover:bg-indigo-100 active:scale-95 text-indigo-700 font-bold py-2 px-1 rounded-2xl text-xs flex flex-col items-center justify-center gap-1 border border-indigo-200 transition-all text-center"
                   >
-                    <Navigation size={17} className="text-indigo-600" />
+                    <Navigation size={16} className="text-indigo-600" />
                     <span>Navegar</span>
                   </a>
                 ) : (
                   <button
                     disabled
-                    className="bg-slate-100 text-slate-400 font-bold py-2.5 px-2 rounded-2xl text-xs flex flex-col items-center justify-center gap-1 cursor-not-allowed opacity-60 text-center"
+                    className="bg-slate-100 text-slate-400 font-semibold py-2 px-1 rounded-2xl text-xs flex flex-col items-center justify-center gap-1 cursor-not-allowed opacity-60 text-center"
                   >
-                    <Navigation size={17} />
+                    <Navigation size={16} />
                     <span>Sin GPS</span>
                   </button>
                 )}
-              </div>
 
-              {/* Bottom Footer: Stepper & Phone Call */}
-              <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => handleStepClient('prev')}
-                    className="py-1.5 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 active:scale-90 transition-all text-xs font-semibold flex items-center gap-1"
-                    title="Parada anterior"
-                  >
-                    <ChevronLeft size={14} />
-                    <span>Anterior</span>
-                  </button>
-                  <button
-                    onClick={() => handleStepClient('next')}
-                    className="py-1.5 px-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 active:scale-90 transition-all text-xs font-semibold flex items-center gap-1"
-                    title="Siguiente parada"
-                  >
-                    <span>Siguiente</span>
-                    <ChevronRight size={14} />
-                  </button>
-                </div>
-
-                {selectedClient.phone && (
+                {/* Llamar */}
+                {selectedClient.phone ? (
                   <a
                     href={`tel:${selectedClient.phone}`}
-                    className="flex items-center gap-1 text-xs font-bold text-slate-700 hover:text-indigo-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl transition-colors"
+                    className="bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-bold py-2 px-1 rounded-2xl text-xs flex flex-col items-center justify-center gap-1 transition-all text-center"
                   >
-                    <Phone size={13} />
+                    <Phone size={16} />
                     <span>Llamar</span>
                   </a>
+                ) : (
+                  <button
+                    disabled
+                    className="bg-slate-100 text-slate-400 font-semibold py-2 px-1 rounded-2xl text-xs flex flex-col items-center justify-center gap-1 cursor-not-allowed opacity-60 text-center"
+                  >
+                    <Phone size={16} />
+                    <span>Sin Tel</span>
+                  </button>
                 )}
               </div>
 
+              {/* Next/Prev Stepper Navigation */}
+              <div className="flex items-center justify-between pt-1 border-t border-slate-100">
+                <button
+                  onClick={() => handleStepClient('prev')}
+                  className="py-1 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 active:scale-90 transition-all text-xs font-semibold flex items-center gap-1"
+                >
+                  <ChevronLeft size={13} />
+                  <span>Anterior</span>
+                </button>
+
+                <span className="text-[11px] text-slate-400 font-semibold">
+                  Parada {selectedClient.visit_order} de {clients.length}
+                </span>
+
+                <button
+                  onClick={() => handleStepClient('next')}
+                  className="py-1 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 active:scale-90 transition-all text-xs font-semibold flex items-center gap-1"
+                >
+                  <span>Siguiente</span>
+                  <ChevronRight size={13} />
+                </button>
+              </div>
+
+            </div>
+          ) : (
+            /* STATE C: COLLAPSED SUMMARY (NO CLIENT SELECTED) */
+            <div className="flex items-center justify-between py-1 text-xs">
+              <span className="text-slate-500 font-medium">Toca cualquier parada en el mapa para ver sus opciones.</span>
+              <button
+                onClick={() => setSheetExpanded(true)}
+                className="text-amber-600 font-bold flex items-center gap-1 hover:underline"
+              >
+                <span>Ver ruta</span>
+                <ChevronRight size={14} />
+              </button>
             </div>
           )}
 
         </div>
-      )}
 
-      {/* ========================================================= */}
-      {/* VISTA LISTA: DETAILED LIST VIEW                          */}
-      {/* ========================================================= */}
-      {activeTab === 'lista' && (
-        <div className="flex-1 flex flex-col gap-5 p-4 pb-24 overflow-y-auto">
-          
-          {/* Top Switcher in List View */}
-          <div className="flex bg-slate-200/80 p-1 rounded-2xl">
-            <button 
-              onClick={() => setActiveTab('mapa')}
-              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === 'mapa' 
-                  ? 'bg-white text-slate-900 shadow-sm' 
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <MapPin size={15} />
-              Vista Mapa ({mapMarkers.length})
-            </button>
-            <button 
-              onClick={() => setActiveTab('lista')}
-              className={`flex-1 py-2 text-xs font-bold rounded-xl transition-all flex items-center justify-center gap-1.5 ${
-                activeTab === 'lista' 
-                  ? 'bg-white text-slate-900 shadow-sm' 
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              <GripVertical size={15} />
-              Vista Lista ({clients.length})
-            </button>
-          </div>
-
-          {/* Inventory Summary */}
-          <section>
-            <h2 className="text-xs font-bold text-slate-600 uppercase tracking-wider mb-2.5 flex items-center gap-2">
-              <Package size={15} className="text-amber-500" />
-              Inventario Asignado
-            </h2>
-            <div className="flex gap-2.5 overflow-x-auto pb-1 -mx-4 px-4 snap-x no-scrollbar">
-              {inventory.map(item => (
-                <div 
-                  key={item.product_id} 
-                  className="bg-white min-w-[130px] rounded-2xl p-3 shadow-sm border border-slate-100 snap-start flex-shrink-0 flex flex-col justify-between"
-                >
-                  <span className="text-xs text-slate-500 font-medium truncate">{item.name}</span>
-                  <span className="text-lg font-black text-slate-800 mt-1">
-                    {item.quantity_dispatched} <span className="text-xs font-normal text-slate-400">uds</span>
-                  </span>
-                </div>
-              ))}
-              {inventory.length === 0 && (
-                <div className="text-xs text-slate-400 italic bg-white p-3 rounded-xl border border-slate-100 w-full text-center">
-                  No hay inventario registrado en la ruta de hoy
-                </div>
-              )}
-            </div>
-          </section>
-
-          {/* Clients List Progress & List */}
-          <section>
-            <div className="flex justify-between items-end mb-2">
-              <h2 className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                Secuencia de Paradas ({clients.length})
-              </h2>
-              <span className="text-xs font-bold text-amber-600 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200">
-                {visitedCount} de {clients.length} completados
-              </span>
-            </div>
-            
-            {/* Progress Bar */}
-            <div className="w-full bg-slate-200 rounded-full h-2 mb-4 overflow-hidden shadow-inner">
-              <div 
-                className="bg-emerald-500 h-2 rounded-full transition-all duration-500" 
-                style={{ width: `${progressPercent}%` }}
-              ></div>
-            </div>
-
-            {isOfflineEmpty ? (
-              <div className="flex flex-col items-center justify-center text-center p-8 bg-white rounded-2xl shadow-sm border border-slate-100 mt-2">
-                <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4 text-slate-400">
-                  <DownloadCloud size={32} />
-                </div>
-                <h2 className="text-base font-bold text-slate-800 mb-1">Sin datos locales</h2>
-                <p className="text-slate-500 text-xs mb-6 max-w-xs">
-                  Carga los datos de demostración o descarga tu ruta de hoy para comenzar.
-                </p>
-                
-                <div className="flex flex-col gap-2.5 w-full">
-                  <button
-                    onClick={toggleDemoMode}
-                    className="bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-all shadow-md shadow-amber-500/20 text-sm"
-                  >
-                    <Sparkles size={18} />
-                    Cargar Ruta de Prueba (Demo)
-                  </button>
-
-                  <button
-                    onClick={downloadRoute}
-                    disabled={downloading}
-                    className="bg-slate-800 hover:bg-slate-900 text-white font-semibold py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 w-full text-sm"
-                  >
-                    {downloading ? <RefreshCw className="animate-spin" size={18} /> : <DownloadCloud size={18} />}
-                    {downloading ? 'Descargando...' : 'Descargar Ruta Asignada'}
-                  </button>
-                  
-                  <Link 
-                    href="/ruta/crear" 
-                    className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold py-2.5 px-6 rounded-xl flex items-center justify-center gap-2 transition-all w-full text-xs"
-                  >
-                    <MapPin size={16} />
-                    Crear Mi Propia Ruta
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <DragDropContext onDragEnd={onDragEnd}>
-                <Droppable droppableId="clients">
-                  {(provided) => (
-                    <div 
-                      className="flex flex-col gap-2.5"
-                      {...provided.droppableProps}
-                      ref={provided.innerRef}
-                    >
-                      {clients.map((rc, index) => (
-                        <Draggable key={rc.id} draggableId={rc.id} index={index}>
-                          {(provided, snapshot) => (
-                            <div 
-                              id={`client-${rc.id}`}
-                              ref={provided.innerRef}
-                              {...provided.draggableProps}
-                              className={`bg-white rounded-2xl p-3.5 shadow-sm border transition-all flex items-center gap-3 ${
-                                rc.visited ? 'border-slate-100 opacity-60' : 'border-slate-200/90'
-                              } ${snapshot.isDragging ? 'shadow-lg ring-2 ring-amber-500 scale-[1.02]' : ''}`}
-                            >
-                              {/* Drag Handle */}
-                              <div 
-                                {...provided.dragHandleProps} 
-                                className="text-slate-300 hover:text-slate-500 cursor-grab active:cursor-grabbing p-1"
-                              >
-                                <GripVertical size={20} />
-                              </div>
-                              
-                              {/* Order Indicator / Visited check */}
-                              <div className="flex-shrink-0">
-                                {rc.visited ? (
-                                  <div className="w-7 h-7 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600">
-                                    <CheckCircle2 size={18} />
-                                  </div>
-                                ) : (
-                                  <div className="w-7 h-7 rounded-full border-2 border-amber-400 bg-amber-50 flex items-center justify-center text-xs font-black text-amber-600">
-                                    {rc.visit_order}
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Client Info */}
-                              <div 
-                                className="flex-1 min-w-0 cursor-pointer"
-                                onClick={() => {
-                                  setSelectedClientId(rc.id);
-                                  setActiveTab('mapa');
-                                }}
-                              >
-                                <div className="flex items-center gap-1.5">
-                                  <h3 className={`font-bold text-sm truncate ${rc.visited ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
-                                    {rc.name}
-                                  </h3>
-                                  {rc.current_balance > 0 && (
-                                    <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.2 rounded">
-                                      Debe RD$ {rc.current_balance.toLocaleString('es-DO')}
-                                    </span>
-                                  )}
-                                </div>
-                                <p className="text-xs text-slate-500 truncate flex items-center gap-1 mt-0.5">
-                                  <MapPin size={11} className="shrink-0 text-slate-400" />
-                                  {rc.address}
-                                </p>
-                              </div>
-
-                              {/* Quick Actions */}
-                              <div className="flex items-center gap-1.5 shrink-0">
-                                <Link
-                                  href={`/sale?clientId=${rc.id}`}
-                                  className="p-2 bg-amber-50 text-amber-600 hover:bg-amber-100 rounded-xl transition-colors"
-                                  title="Vender a este cliente"
-                                >
-                                  <ShoppingCart size={16} />
-                                </Link>
-                                
-                                {rc.lat && rc.lng && (
-                                  <a
-                                    href={`https://www.google.com/maps/dir/?api=1&destination=${rc.lat},${rc.lng}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="p-2 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-xl transition-colors"
-                                    title="Navegar en Google Maps"
-                                  >
-                                    <Navigation size={16} />
-                                  </a>
-                                )}
-                              </div>
-                            </div>
-                          )}
-                        </Draggable>
-                      ))}
-                      {provided.placeholder}
-                    </div>
-                  )}
-                </Droppable>
-              </DragDropContext>
-            )}
-          </section>
-
-        </div>
-      )}
+      </div>
 
     </div>
   );

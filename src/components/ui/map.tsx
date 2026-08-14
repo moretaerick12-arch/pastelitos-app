@@ -35,6 +35,7 @@ interface MapProps {
   osrmRoute?: [number, number][];
   centerOnUserTrigger?: number;
   fitBoundsTrigger?: number;
+  mapType?: 'streets' | 'satellite';
 }
 
 export function Map({ 
@@ -46,7 +47,8 @@ export function Map({
   onMarkerClick, 
   osrmRoute,
   centerOnUserTrigger,
-  fitBoundsTrigger
+  fitBoundsTrigger,
+  mapType = 'streets'
 }: MapProps) {
   return (
     <MapInner 
@@ -59,6 +61,7 @@ export function Map({
       osrmRoute={osrmRoute} 
       centerOnUserTrigger={centerOnUserTrigger}
       fitBoundsTrigger={fitBoundsTrigger}
+      mapType={mapType}
     />
   );
 }
