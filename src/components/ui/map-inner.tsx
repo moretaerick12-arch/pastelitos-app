@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useRef } from "react";
+import "leaflet/dist/leaflet.css";
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents, Polyline, useMap } from "react-leaflet";
 import L from "leaflet";
 import { MapMarker } from "./map";
@@ -16,30 +17,74 @@ const defaultIcon = L.icon({
   shadowSize: [41, 41]
 });
 
-const createCustomIcon = (number?: number, colorClass: string = "bg-amber-500") => {
+const createCustomIcon = (
+  number?: number, 
+  colorClass: string = "bg-amber-500", 
+  isSelected: boolean = false,
+  isVisited: boolean = false
+) => {
+  let innerHtml = "";
+  
+  if (isVisited) {
+    innerHtml = `
+      <div class="relative flex items-center justify-center">
+        ${isSelected ? '<span class="absolute -inset-1.5 rounded-full bg-emerald-400 opacity-60 animate-ping"></span>' : ''}
+        <div class="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center font-bold shadow-lg border-2 ${isSelected ? 'border-white ring-4 ring-emerald-400/80 scale-110' : 'border-white'} text-sm transition-transform">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path>
+          </svg>
+        </div>
+      </div>
+    `;
+  } else if (isSelected) {
+    innerHtml = `
+      <div class="relative flex items-center justify-center">
+        <span class="absolute -inset-2 rounded-full bg-amber-400 opacity-60 animate-ping"></span>
+        <div class="w-9 h-9 rounded-full bg-amber-500 text-white flex items-center justify-center font-black shadow-xl border-2 border-white ring-4 ring-indigo-500 scale-110 text-sm transition-transform">
+          ${number || ''}
+        </div>
+      </div>
+    `;
+  } else {
+    innerHtml = `
+      <div class="w-8 h-8 rounded-full ${colorClass} text-white flex items-center justify-center font-bold shadow-md border-2 border-white text-sm hover:scale-110 transition-transform">
+        ${number || ''}
+      </div>
+    `;
+  }
+
   return L.divIcon({
-    html: `<div class='${colorClass} text-white rounded-full w-8 h-8 flex items-center justify-center font-bold shadow-md border-2 border-white text-sm'>${number || ''}</div>`,
-    className: 'custom-div-icon',
-    iconSize: [32, 32],
-    iconAnchor: [16, 32],
-    popupAnchor: [0, -32],
+    html: innerHtml,
+    className: 'custom-map-marker-icon',
+    iconSize: [36, 36],
+    iconAnchor: [18, 18],
+    popupAnchor: [0, -20],
   });
 };
 
 const userLocationIcon = L.divIcon({
-  html: `<div class="w-4 h-4 bg-blue-500 rounded-full border-2 border-white shadow-[0_0_15px_rgba(59,130,246,0.5)]"></div>`,
-  className: '',
-  iconSize: [16, 16],
-  iconAnchor: [8, 8],
+  html: `
+    <div class="relative flex items-center justify-center w-8 h-8">
+      <span class="absolute w-8 h-8 bg-blue-500 rounded-full opacity-40 animate-ping"></span>
+      <span class="absolute w-5 h-5 bg-blue-400/50 rounded-full"></span>
+      <div class="relative w-4 h-4 bg-blue-600 rounded-full border-2 border-white shadow-lg"></div>
+    </div>
+  `,
+  className: 'user-location-marker',
+  iconSize: [32, 32],
+  iconAnchor: [16, 16],
 });
 
 interface MapInnerProps {
   markers: MapMarker[];
   className?: string;
   zoom?: number;
+  selectedMarkerId?: string | null;
   onClick?: (lat: number, lng: number) => void;
   onMarkerClick?: (id: string) => void;
   osrmRoute?: [number, number][];
+  centerOnUserTrigger?: number;
+  fitBoundsTrigger?: number;
 }
 
 function MapEvents({ onClick }: { onClick?: (lat: number, lng: number) => void }) {
@@ -51,28 +96,84 @@ function MapEvents({ onClick }: { onClick?: (lat: number, lng: number) => void }
   return null;
 }
 
-function CenterMapControl({ userLocation }: { userLocation: [number, number] | null }) {
+function MapController({
+  selectedMarkerId,
+  markers,
+  userLocation,
+  centerOnUserTrigger,
+  fitBoundsTrigger
+}: {
+  selectedMarkerId?: string | null;
+  markers: MapMarker[];
+  userLocation: [number, number] | null;
+  centerOnUserTrigger?: number;
+  fitBoundsTrigger?: number;
+}) {
   const map = useMap();
-  
-  if (!userLocation) return null;
-  
-  return (
-    <div className="absolute bottom-4 right-4 z-[1000]">
-      <button 
-        onClick={(e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          map.flyTo(userLocation, 16);
-        }}
-        className="bg-white hover:bg-slate-50 text-slate-800 font-semibold py-2 px-4 rounded-xl shadow-lg border border-slate-200 transition-colors flex items-center gap-2"
-      >
-        <span>📍</span> Centrar en mí
-      </button>
-    </div>
-  );
+  const initialFitRef = useRef(false);
+
+  // Initial bounds fit when markers are loaded
+  useEffect(() => {
+    if (!initialFitRef.current && markers.length > 0) {
+      try {
+        const bounds = L.latLngBounds(markers.map(m => [m.lat, m.lng]));
+        if (userLocation) {
+          bounds.extend(userLocation);
+        }
+        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+        initialFitRef.current = true;
+      } catch (e) {
+        console.warn("fitBounds failed:", e);
+      }
+    }
+  }, [markers, userLocation, map]);
+
+  // Fit bounds triggered explicitly
+  useEffect(() => {
+    if (fitBoundsTrigger && fitBoundsTrigger > 0 && markers.length > 0) {
+      try {
+        const bounds = L.latLngBounds(markers.map(m => [m.lat, m.lng]));
+        if (userLocation) {
+          bounds.extend(userLocation);
+        }
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 16, animate: true });
+      } catch (e) {
+        console.warn("fitBounds trigger failed:", e);
+      }
+    }
+  }, [fitBoundsTrigger, markers, userLocation, map]);
+
+  // Fly to user location triggered explicitly
+  useEffect(() => {
+    if (centerOnUserTrigger && centerOnUserTrigger > 0 && userLocation) {
+      map.flyTo(userLocation, 16, { duration: 1 });
+    }
+  }, [centerOnUserTrigger, userLocation, map]);
+
+  // Pan smoothly to selected marker
+  useEffect(() => {
+    if (selectedMarkerId) {
+      const selected = markers.find(m => m.id === selectedMarkerId);
+      if (selected) {
+        map.panTo([selected.lat, selected.lng], { animate: true, duration: 0.6 });
+      }
+    }
+  }, [selectedMarkerId, markers, map]);
+
+  return null;
 }
 
-export default function MapInner({ markers, className = "h-[450px] w-full rounded-xl z-0", zoom = 13, onClick, onMarkerClick, osrmRoute }: MapInnerProps) {
+export default function MapInner({ 
+  markers, 
+  className = "h-[450px] w-full rounded-xl z-0", 
+  zoom = 14, 
+  selectedMarkerId,
+  onClick, 
+  onMarkerClick, 
+  osrmRoute,
+  centerOnUserTrigger,
+  fitBoundsTrigger
+}: MapInnerProps) {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
   useEffect(() => {
@@ -105,59 +206,110 @@ export default function MapInner({ markers, className = "h-[450px] w-full rounde
     }
   }, []);
 
-  // Center map on the first marker, or use a default center (e.g. Santo Domingo)
+  // Center map on selected marker, or first marker, or Santo Domingo
   const defaultCenter: [number, number] = markers.length > 0
     ? [markers[0].lat, markers[0].lng]
-    : [18.4861, -69.9312]; // Santo Domingo coordinates
+    : [18.4861, -69.9312]; // Santo Domingo default
 
   const routeCoordinates = markers.map(m => [m.lat, m.lng] as [number, number]);
 
   return (
-    <div className={`relative ${className}`} style={{ minHeight: "400px", height: "100%", width: "100%" }}>
+    <div className={`relative ${className}`} style={{ minHeight: "420px", height: "100%", width: "100%" }}>
       <MapContainer 
         center={defaultCenter} 
         zoom={zoom} 
         scrollWheelZoom={true} 
-        style={{ height: "100%", width: "100%", minHeight: "400px", zIndex: 0 }}
-        className="rounded-xl overflow-hidden"
+        style={{ height: "100%", width: "100%", minHeight: "420px", zIndex: 0 }}
+        className="rounded-2xl overflow-hidden"
       >
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        
         <MapEvents onClick={onClick} />
         
+        <MapController 
+          selectedMarkerId={selectedMarkerId}
+          markers={markers}
+          userLocation={userLocation}
+          centerOnUserTrigger={centerOnUserTrigger}
+          fitBoundsTrigger={fitBoundsTrigger}
+        />
+
+        {/* Polylines: OSRM driving route or fallback dash polyline */}
         {osrmRoute && osrmRoute.length > 1 ? (
-          <Polyline positions={osrmRoute} color="#f59e0b" weight={5} />
+          <>
+            <Polyline positions={osrmRoute} color="#d97706" weight={7} opacity={0.6} />
+            <Polyline positions={osrmRoute} color="#f59e0b" weight={4} opacity={0.9} />
+          </>
         ) : routeCoordinates.length > 1 ? (
-          <Polyline positions={routeCoordinates} color="#f59e0b" weight={4} dashArray="10, 10" />
+          <Polyline positions={routeCoordinates} color="#f59e0b" weight={3} dashArray="8, 8" opacity={0.8} />
         ) : null}
 
-        {markers.map((marker) => (
-          <Marker 
-            key={marker.id} 
-            position={[marker.lat, marker.lng]}
-            icon={marker.color || marker.number ? createCustomIcon(marker.number, marker.color) : defaultIcon}
-            eventHandlers={{
-              click: () => {
-                if (onMarkerClick) onMarkerClick(marker.id);
-              }
-            }}
-          >
+        {/* Markers */}
+        {markers.map((marker) => {
+          const isSelected = selectedMarkerId === marker.id;
+          const isVisited = !!marker.visited;
+          const icon = createCustomIcon(
+            marker.number, 
+            marker.color || (isVisited ? "bg-emerald-600" : "bg-amber-500"), 
+            isSelected, 
+            isVisited
+          );
+
+          return (
+            <Marker 
+              key={marker.id} 
+              position={[marker.lat, marker.lng]}
+              icon={icon}
+              zIndexOffset={isSelected ? 1000 : (marker.number ? 500 - marker.number : 100)}
+              eventHandlers={{
+                click: (e) => {
+                  if (onMarkerClick) {
+                    onMarkerClick(marker.id);
+                  }
+                }
+              }}
+            >
+              <Popup className="delivery-client-popup">
+                <div className="p-1 min-w-[160px] font-sans">
+                  <div className="flex items-center gap-1.5 mb-1">
+                    {marker.number && (
+                      <span className="w-5 h-5 rounded-full bg-amber-500 text-white text-[11px] font-bold flex items-center justify-center">
+                        {marker.number}
+                      </span>
+                    )}
+                    <p className="font-bold text-slate-900 text-sm leading-tight m-0 truncate">
+                      {marker.title}
+                    </p>
+                  </div>
+                  {marker.subtitle && (
+                    <p className="text-xs text-slate-500 m-0 line-clamp-2">
+                      {marker.subtitle}
+                    </p>
+                  )}
+                  {marker.balance !== undefined && marker.balance > 0 && (
+                    <div className="mt-2 text-xs font-semibold text-rose-600 bg-rose-50 px-2 py-0.5 rounded">
+                      Deuda: RD$ {marker.balance.toLocaleString('es-DO')}
+                    </div>
+                  )}
+                </div>
+              </Popup>
+            </Marker>
+          );
+        })}
+
+        {/* Repartidor Live GPS Marker */}
+        {userLocation && (
+          <Marker position={userLocation} icon={userLocationIcon} zIndexOffset={2000}>
             <Popup>
-              <div className="font-sans">
-                <p className="font-semibold text-gray-900 m-0">{marker.title}</p>
-                {marker.subtitle && <p className="text-sm text-gray-500 mt-1 mb-0">{marker.subtitle}</p>}
+              <div className="text-xs font-semibold text-blue-700 py-1">
+                📍 Tu ubicación actual
               </div>
             </Popup>
           </Marker>
-        ))}
-
-        {userLocation && (
-          <Marker position={userLocation} icon={userLocationIcon} zIndexOffset={1000} />
         )}
-        
-        <CenterMapControl userLocation={userLocation} />
       </MapContainer>
     </div>
   );

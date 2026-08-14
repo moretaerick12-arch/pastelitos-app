@@ -5,41 +5,54 @@ import { useRouter } from 'next/navigation';
 import { SyncManager } from '@/lib/sync/syncManager';
 import { createClient } from '@/lib/supabase/client';
 import { v4 as uuidv4 } from 'uuid';
-import { Map, Plus, Save, ArrowLeft } from 'lucide-react';
+import { Map, Plus, Save, ArrowLeft, Trash2, MapPin, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import Link from 'next/link';
+import { LocationPicker } from '@/components/ui/location-picker';
+
+interface NewClientItem {
+  id: string;
+  name: string;
+  address: string;
+  lat?: number | null;
+  lng?: number | null;
+  expandedMap?: boolean;
+}
 
 export default function CrearRutaPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [routeName, setRouteName] = useState('');
   
-  // Minimal new client creation for simplicity
-  const [newClients, setNewClients] = useState<{name: string, address: string, lat?: number, lng?: number}[]>([{ name: '', address: '' }]);
+  const [newClients, setNewClients] = useState<NewClientItem[]>([
+    { id: uuidv4(), name: '', address: '', lat: null, lng: null, expandedMap: true }
+  ]);
 
   const handleAddClientRow = () => {
-    setNewClients([...newClients, { name: '', address: '' }]);
+    setNewClients(prev => [
+      ...prev, 
+      { id: uuidv4(), name: '', address: '', lat: null, lng: null, expandedMap: false }
+    ]);
   };
 
-  const handleClientChange = (index: number, field: string, value: string | number) => {
-    const updated = [...newClients];
-    updated[index] = { ...updated[index], [field]: value };
-    setNewClients(updated);
+  const handleRemoveClientRow = (index: number) => {
+    if (newClients.length <= 1) return;
+    setNewClients(prev => prev.filter((_, idx) => idx !== index));
   };
 
-  const handleGetGPS = (index: number) => {
-    if (!navigator.geolocation) {
-      alert("Geolocalización no soportada por el navegador.");
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        handleClientChange(index, 'lat', position.coords.latitude);
-        handleClientChange(index, 'lng', position.coords.longitude);
-      },
-      (error) => {
-        alert("Error obteniendo ubicación: " + error.message);
-      }
-    );
+  const handleClientChange = (index: number, field: keyof NewClientItem, value: any) => {
+    setNewClients(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+  };
+
+  const toggleExpandMap = (index: number) => {
+    setNewClients(prev => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], expandedMap: !updated[index].expandedMap };
+      return updated;
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -57,19 +70,24 @@ export default function CrearRutaPage() {
       const route = {
         id: routeId,
         name: routeName,
-        zone: 'Ruta Libre', // default
+        zone: 'Ruta Libre',
         is_seed: false,
         created_by: user.id,
       };
 
       const clientsToCreate = newClients.filter(c => c.name.trim() !== '');
+      if (clientsToCreate.length === 0) {
+        alert('Debes agregar al menos un cliente con nombre.');
+        setLoading(false);
+        return;
+      }
       
       const generatedClients = clientsToCreate.map(c => ({
-        id: uuidv4(),
+        id: c.id,
         name: c.name,
         address: c.address || 'Sin dirección',
-        lat: c.lat || null,
-        lng: c.lng || null,
+        lat: c.lat ? Number(c.lat) : null,
+        lng: c.lng ? Number(c.lng) : null,
         credit_limit: 0,
         current_balance: 0,
         status: 'activo'
@@ -102,94 +120,156 @@ export default function CrearRutaPage() {
       // Go back to the route map
       router.push('/ruta');
       
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Error creando ruta');
+      alert('Error creando ruta: ' + (err.message || 'Inténtalo de nuevo'));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="flex flex-col gap-6 animate-slide-up p-2">
-      <div className="flex items-center gap-3 mb-2">
-        <Link href="/ruta" className="text-slate-500 hover:text-slate-700">
-          <ArrowLeft size={24} />
+    <div className="flex flex-col gap-5 animate-slide-up pb-12">
+      {/* Header */}
+      <div className="flex items-center gap-3">
+        <Link href="/ruta" className="p-2 -ml-2 text-slate-500 hover:text-slate-800 rounded-xl">
+          <ArrowLeft size={22} />
         </Link>
-        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-          <Map className="text-amber-500" />
-          Crear Ruta
-        </h1>
+        <div>
+          <h1 className="text-xl font-bold text-slate-800 flex items-center gap-2">
+            <Map className="text-amber-500" size={22} />
+            Crear Nueva Ruta
+          </h1>
+          <p className="text-xs text-slate-500">Agrega paradas buscando o marcando en el mapa</p>
+        </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-5">
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-          <label className="block text-sm font-semibold text-slate-700 mb-2">Nombre de la Ruta</label>
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        {/* Route Name */}
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+          <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
+            Nombre de la Ruta
+          </label>
           <input 
             required 
             type="text" 
             value={routeName}
             onChange={(e) => setRouteName(e.target.value)}
-            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500" 
-            placeholder="Ej: Ruta Jueves" 
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500/50 focus:border-amber-500" 
+            placeholder="Ej: Ruta Bella Vista & Piantini" 
           />
         </div>
 
-        <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-sm font-semibold text-slate-700">Agregar Clientes Nuevos</h2>
+        {/* Clients Section */}
+        <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
+          <div className="flex justify-between items-center mb-3">
+            <h2 className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+              Paradas / Clientes ({newClients.length})
+            </h2>
           </div>
           
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-4">
             {newClients.map((client, idx) => (
-              <div key={idx} className="flex flex-col gap-2 p-3 bg-slate-50 rounded-xl border border-slate-100">
-                <input 
-                  type="text" 
-                  value={client.name}
-                  onChange={(e) => handleClientChange(idx, 'name', e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg p-2 text-sm text-slate-800 focus:outline-none focus:border-amber-500" 
-                  placeholder={`Nombre Cliente ${idx + 1}`} 
-                />
-                <input 
-                  type="text" 
-                  value={client.address}
-                  onChange={(e) => handleClientChange(idx, 'address', e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg p-2 text-sm text-slate-800 focus:outline-none focus:border-amber-500" 
-                  placeholder={`Dirección (Opcional)`} 
-                />
-                <div className="flex items-center gap-2 mt-1">
-                  <button
-                    type="button"
-                    onClick={() => handleGetGPS(idx)}
-                    className="flex-1 py-2 text-sm bg-blue-50 text-blue-600 rounded-lg border border-blue-100 hover:bg-blue-100 transition-colors"
-                  >
-                    📍 Obtener GPS
-                  </button>
-                  {client.lat && client.lng && (
-                    <span className="text-xs text-green-600 flex-1 text-center font-medium">✓ Capturado</span>
-                  )}
+              <div 
+                key={client.id} 
+                className="flex flex-col gap-3 p-3.5 bg-slate-50 rounded-2xl border border-slate-200/90 shadow-sm"
+              >
+                {/* Header row */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-6 rounded-full bg-amber-500 text-white text-xs font-black flex items-center justify-center shadow-sm">
+                      #{idx + 1}
+                    </span>
+                    <span className="text-xs font-bold text-slate-800 truncate">
+                      {client.name ? client.name : `Parada ${idx + 1}`}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => toggleExpandMap(idx)}
+                      className="p-1.5 text-slate-500 hover:text-slate-800 rounded-lg hover:bg-slate-200/70 transition-colors flex items-center gap-1 text-xs font-semibold"
+                    >
+                      <MapPin size={14} className={client.lat ? 'text-emerald-600' : 'text-slate-400'} />
+                      <span>{client.expandedMap ? 'Ocultar mapa' : 'Ubicación'}</span>
+                      {client.expandedMap ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                    </button>
+
+                    {newClients.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveClientRow(idx)}
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                        title="Eliminar parada"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </div>
                 </div>
+
+                {/* Name & Address Inputs */}
+                <div className="flex flex-col gap-2">
+                  <input 
+                    type="text" 
+                    required
+                    value={client.name}
+                    onChange={(e) => handleClientChange(idx, 'name', e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-sm font-semibold text-slate-800 focus:outline-none focus:border-amber-500" 
+                    placeholder="Nombre del Colmado o Puesto *" 
+                  />
+                  
+                  <input 
+                    type="text" 
+                    value={client.address}
+                    onChange={(e) => handleClientChange(idx, 'address', e.target.value)}
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2.5 text-xs text-slate-800 focus:outline-none focus:border-amber-500" 
+                    placeholder="Dirección o referencia (Opcional)" 
+                  />
+                </div>
+
+                {/* Interactive Location Picker: Search, GPS, or Click on Map */}
+                {client.expandedMap && (
+                  <div className="pt-2 border-t border-slate-200">
+                    <LocationPicker
+                      lat={client.lat}
+                      lng={client.lng}
+                      address={client.address}
+                      title={client.name || `Parada #${idx + 1}`}
+                      onChange={(lat, lng, address) => {
+                        handleClientChange(idx, 'lat', lat);
+                        handleClientChange(idx, 'lng', lng);
+                        if (address && !client.address) {
+                          handleClientChange(idx, 'address', address);
+                        }
+                      }}
+                    />
+                  </div>
+                )}
               </div>
             ))}
           </div>
 
+          {/* Add Stop Button */}
           <button 
             type="button" 
             onClick={handleAddClientRow}
-            className="mt-4 w-full flex items-center justify-center gap-2 py-2 text-sm font-medium text-amber-600 bg-amber-50 rounded-lg hover:bg-amber-100 transition-colors"
+            className="mt-4 w-full flex items-center justify-center gap-2 py-3 text-xs font-bold text-amber-700 bg-amber-50 border border-amber-200 rounded-xl hover:bg-amber-100 active:scale-[0.99] transition-all"
           >
             <Plus size={16} />
-            Añadir otro cliente
+            Agregar Otra Parada
           </button>
         </div>
 
+        {/* Submit Route */}
         <button 
           type="submit" 
           disabled={loading || !routeName}
-          className="bg-amber-500 hover:bg-amber-600 text-white font-semibold py-4 px-6 rounded-2xl flex justify-center items-center gap-2 transition-colors disabled:opacity-50 mt-4 shadow-sm shadow-amber-500/20"
+          className="bg-amber-500 hover:bg-amber-600 active:scale-[0.99] text-white font-bold py-4 px-6 rounded-2xl flex justify-center items-center gap-2 transition-all disabled:opacity-50 shadow-lg shadow-amber-500/20 text-sm"
         >
-          <Save size={20} />
-          {loading ? 'Guardando...' : 'Crear y Asignar Ruta'}
+          <Save size={18} />
+          {loading ? 'Guardando...' : 'Guardar y Comenzar Ruta'}
         </button>
       </form>
     </div>

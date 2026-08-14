@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import { Users, Search, Plus, Edit2, AlertTriangle, MapPin } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { Map } from "@/components/ui/map";
+import { LocationPicker } from "@/components/ui/location-picker";
 
 interface Client {
   id: string;
@@ -274,50 +275,25 @@ export default function ClientsPage() {
               className="w-full bg-[#1a1a24] border border-white/10 rounded-lg p-2 text-white focus:border-amber-500 focus:outline-none"
             />
           </div>
-          <div className="flex gap-4">
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-300 mb-1">Latitud</label>
-              <input
-                type="number"
-                step="any"
-                value={formData.lat}
-                onChange={(e) => setFormData({ ...formData, lat: e.target.value })}
-                className="w-full bg-[#1a1a24] border border-white/10 rounded-lg p-2 text-white focus:border-amber-500 focus:outline-none"
-              />
-            </div>
-            <div className="flex-1">
-              <label className="block text-sm font-medium text-gray-300 mb-1">Longitud</label>
-              <input
-                type="number"
-                step="any"
-                value={formData.lng}
-                onChange={(e) => setFormData({ ...formData, lng: e.target.value })}
-                className="w-full bg-[#1a1a24] border border-white/10 rounded-lg p-2 text-white focus:border-amber-500 focus:outline-none"
-              />
-            </div>
-          </div>
-          
           <div className="mt-2">
-            <label className="block text-sm font-medium text-gray-300 mb-1 flex items-center gap-2">
+            <label className="block text-sm font-medium text-gray-300 mb-1.5 flex items-center gap-2">
               <MapPin className="w-4 h-4 text-amber-500" />
-              Ubicación en Mapa (Click para fijar)
+              Ubicación GPS y Dirección en Mapa
             </label>
-            <div className="h-[200px] w-full border border-white/10 rounded-lg overflow-hidden">
-              <Map 
-                markers={
-                  formData.lat !== "" && formData.lng !== "" && !isNaN(Number(formData.lat)) && !isNaN(Number(formData.lng))
-                    ? [{
-                        id: 'current',
-                        lat: Number(formData.lat),
-                        lng: Number(formData.lng),
-                        title: formData.name || 'Nuevo Cliente'
-                      }]
-                    : []
-                }
-                onClick={(lat, lng) => setFormData(prev => ({ ...prev, lat, lng }))}
-                zoom={15}
-              />
-            </div>
+            <LocationPicker
+              lat={formData.lat !== "" && !isNaN(Number(formData.lat)) ? Number(formData.lat) : null}
+              lng={formData.lng !== "" && !isNaN(Number(formData.lng)) ? Number(formData.lng) : null}
+              address={formData.address}
+              title={formData.name || 'Cliente'}
+              onChange={(lat, lng, address) => {
+                setFormData(prev => ({
+                  ...prev,
+                  lat: lat !== null ? lat : "",
+                  lng: lng !== null ? lng : "",
+                  address: address && !prev.address ? address : prev.address
+                }));
+              }}
+            />
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-300 mb-1">Límite de Crédito</label>

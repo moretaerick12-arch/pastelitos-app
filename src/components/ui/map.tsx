@@ -20,17 +20,45 @@ export interface MapMarker {
   subtitle?: string;
   color?: string;
   number?: number;
+  visited?: boolean;
+  balance?: number;
+  phone?: string;
 }
 
 interface MapProps {
   markers: MapMarker[];
   className?: string;
   zoom?: number;
+  selectedMarkerId?: string | null;
   onClick?: (lat: number, lng: number) => void;
   onMarkerClick?: (id: string) => void;
   osrmRoute?: [number, number][];
+  centerOnUserTrigger?: number;
+  fitBoundsTrigger?: number;
 }
 
-export function Map({ markers, className, zoom = 13, onClick, onMarkerClick, osrmRoute }: MapProps) {
-  return <MapInner markers={markers} className={className} zoom={zoom} onClick={onClick} onMarkerClick={onMarkerClick} osrmRoute={osrmRoute} />;
+export function Map({ 
+  markers, 
+  className, 
+  zoom = 13, 
+  selectedMarkerId,
+  onClick, 
+  onMarkerClick, 
+  osrmRoute,
+  centerOnUserTrigger,
+  fitBoundsTrigger
+}: MapProps) {
+  return (
+    <MapInner 
+      markers={markers} 
+      className={className} 
+      zoom={zoom} 
+      selectedMarkerId={selectedMarkerId}
+      onClick={onClick} 
+      onMarkerClick={onMarkerClick} 
+      osrmRoute={osrmRoute} 
+      centerOnUserTrigger={centerOnUserTrigger}
+      fitBoundsTrigger={fitBoundsTrigger}
+    />
+  );
 }

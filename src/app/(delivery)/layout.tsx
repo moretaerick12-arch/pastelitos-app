@@ -36,6 +36,11 @@ export default function DeliveryLayout({
     []
   ) ?? 0;
 
+  const currentRouteMeta = useLiveQuery(() => db.meta.get('current_route_id'));
+  const isDemo = currentRouteMeta?.value === 'demo-route-1';
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   useEffect(() => {
     // Check online status
     setIsOnline(navigator.onLine);
@@ -117,9 +122,16 @@ export default function DeliveryLayout({
         <div className="flex justify-between items-center">
           <div>
             <h1 className="text-xl font-bold text-slate-900">Hola, {userName} 👋</h1>
-            <p className="text-sm text-slate-500 font-medium">{routeName}</p>
+            <p className="text-sm text-slate-500 font-medium">
+              {mounted && isDemo ? 'Ruta Demo (Santo Domingo)' : routeName}
+            </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            {mounted && isDemo && (
+              <div className="flex items-center gap-1 text-[11px] font-extrabold px-2.5 py-1 rounded-full bg-amber-500 text-white shadow-sm">
+                <span>🧪 Demo</span>
+              </div>
+            )}
             {pendingSyncCount > 0 && (
               <div className="flex items-center gap-1 text-xs font-semibold px-2 py-1 rounded-full bg-amber-100 text-amber-700 animate-pulse">
                 <CloudUpload size={14} />
@@ -142,7 +154,7 @@ export default function DeliveryLayout({
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 p-4 animate-fade-in">
+      <main className={`flex-1 ${pathname === '/ruta' ? 'p-0' : 'p-4'} animate-fade-in`}>
         {children}
       </main>
 
