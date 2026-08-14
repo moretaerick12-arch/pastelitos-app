@@ -239,14 +239,6 @@ export default function RutaPage() {
             if (!showAllClients) {
               mapMarkers = mapMarkers.filter(m => !clients.find(c => c.id === m.id)?.visited);
             }
-            
-            if (mapMarkers.length === 0) {
-              return (
-                <div className="flex-1 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">
-                  <p className="text-slate-500">No hay clientes con coordenadas.</p>
-                </div>
-              );
-            }
 
             return (
               <div className="flex-1 w-full rounded-xl overflow-hidden shadow-sm border border-slate-100 relative">
