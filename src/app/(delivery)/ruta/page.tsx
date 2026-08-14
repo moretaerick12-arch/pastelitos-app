@@ -173,37 +173,6 @@ export default function RutaPage() {
   const visitedCount = clients.filter(c => c.visited).length;
   const progressPercent = clients.length > 0 ? Math.round((visitedCount / clients.length) * 100) : 0;
 
-  if (isOfflineEmpty) {
-    return (
-      <div className="flex flex-col gap-4 animate-slide-up">
-        {/* Default empty map */}
-        <div className="bg-white p-3 rounded-2xl shadow-sm border border-slate-100 h-[300px] overflow-hidden relative">
-          <Map markers={[]} className="w-full h-full rounded-xl z-0" zoom={13} />
-        </div>
-
-        <div className="flex flex-col items-center justify-center text-center p-8 bg-white rounded-2xl shadow-sm border border-slate-100">
-          <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-400">
-            <MapPin size={32} />
-          </div>
-          <h2 className="text-lg font-semibold text-slate-800 mb-2">Sin datos locales</h2>
-          <p className="text-slate-500 text-sm mb-6">Necesitas descargar tu ruta de hoy para trabajar offline.</p>
-        
-        <div className="flex flex-col gap-3 mt-2 w-full">
-          <button
-            onClick={downloadRoute}
-            disabled={downloading}
-            className="bg-amber-500 hover:bg-amber-600 text-white font-medium py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50 w-full"
-          >
-            {downloading ? <RefreshCw className="animate-spin" size={20} /> : <DownloadCloud size={20} />}
-            {downloading ? 'Descargando...' : 'Descargar Ruta Asignada'}
-          </button>
-          
-          <div className="relative flex items-center py-2">
-            <div className="flex-grow border-t border-slate-200"></div>
-            <span className="flex-shrink-0 mx-4 text-slate-400 text-xs font-medium uppercase">o</span>
-            <div className="flex-grow border-t border-slate-200"></div>
-          </div>
-          
           <Link href="/ruta/crear" className="bg-slate-800 hover:bg-slate-900 text-white font-medium py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-colors w-full">
             <MapPin size={20} />
             Crear Mi Propia Ruta
@@ -346,7 +315,33 @@ export default function RutaPage() {
               <div className="bg-amber-500 h-1.5 rounded-full transition-all duration-500" style={{ width: `${progressPercent}%` }}></div>
             </div>
 
-            <DragDropContext onDragEnd={onDragEnd}>
+            {isOfflineEmpty ? (
+              <div className="flex flex-col items-center justify-center text-center p-8 bg-white rounded-2xl shadow-sm border border-slate-100 mt-4">
+                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 text-slate-400">
+                  <DownloadCloud size={32} />
+                </div>
+                <h2 className="text-lg font-semibold text-slate-800 mb-2">Sin datos locales</h2>
+                <p className="text-slate-500 text-sm mb-6">Necesitas descargar tu ruta de hoy para comenzar a trabajar.</p>
+                
+                <div className="flex flex-col gap-3 w-full">
+                  <button
+                    onClick={downloadRoute}
+                    disabled={downloading}
+                    className="bg-amber-500 hover:bg-amber-600 text-white font-medium py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-colors disabled:opacity-50 w-full"
+                  >
+                    {downloading ? <RefreshCw className="animate-spin" size={20} /> : <DownloadCloud size={20} />}
+                    {downloading ? 'Descargando...' : 'Descargar Ruta Asignada'}
+                  </button>
+                  
+                  <Link href="/ruta/crear" className="bg-slate-800 hover:bg-slate-900 text-white font-medium py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-colors w-full">
+                    <MapPin size={20} />
+                    Crear Mi Propia Ruta
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <DragDropContext onDragEnd={onDragEnd}>
+
               <Droppable droppableId="clients">
                 {(provided) => (
                   <div 
@@ -416,6 +411,7 @@ export default function RutaPage() {
                 )}
               </Droppable>
             </DragDropContext>
+            )}
           </section>
         </div>
       )}
