@@ -111,24 +111,22 @@ function MapController({
 }) {
   const map = useMap();
   const initialFitRef = useRef(false);
+  const lastSelectedIdRef = useRef<string | null>(null);
 
-  // Initial bounds fit when markers are loaded
+  // Initial bounds fit: only once on mount when markers are first loaded
   useEffect(() => {
     if (!initialFitRef.current && markers.length > 0) {
       try {
         const bounds = L.latLngBounds(markers.map(m => [m.lat, m.lng]));
-        if (userLocation) {
-          bounds.extend(userLocation);
-        }
-        map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+        map.fitBounds(bounds, { padding: [50, 50], maxZoom: 15 });
         initialFitRef.current = true;
       } catch (e) {
-        console.warn("fitBounds failed:", e);
+        console.warn("initial fitBounds failed:", e);
       }
     }
-  }, [markers, userLocation, map]);
+  }, [markers.length > 0, map]);
 
-  // Fit bounds triggered explicitly
+  // Fit bounds triggered explicitly by button click
   useEffect(() => {
     if (fitBoundsTrigger && fitBoundsTrigger > 0 && markers.length > 0) {
       try {
@@ -141,24 +139,27 @@ function MapController({
         console.warn("fitBounds trigger failed:", e);
       }
     }
-  }, [fitBoundsTrigger, markers, userLocation, map]);
+  }, [fitBoundsTrigger]);
 
-  // Fly to user location triggered explicitly
+  // Fly to user location triggered explicitly by "Centrar en mí" button click
   useEffect(() => {
     if (centerOnUserTrigger && centerOnUserTrigger > 0 && userLocation) {
-      map.flyTo(userLocation, 16, { duration: 1 });
+      map.flyTo(userLocation, 16, { duration: 0.8 });
     }
-  }, [centerOnUserTrigger, userLocation, map]);
+  }, [centerOnUserTrigger]);
 
-  // Pan smoothly to selected marker
+  // Pan ONLY when selectedMarkerId genuinely changes to a different marker
   useEffect(() => {
-    if (selectedMarkerId) {
+    if (selectedMarkerId && selectedMarkerId !== lastSelectedIdRef.current) {
       const selected = markers.find(m => m.id === selectedMarkerId);
       if (selected) {
         map.panTo([selected.lat, selected.lng], { animate: true, duration: 0.6 });
+        lastSelectedIdRef.current = selectedMarkerId;
       }
+    } else if (!selectedMarkerId) {
+      lastSelectedIdRef.current = null;
     }
-  }, [selectedMarkerId, markers, map]);
+  }, [selectedMarkerId]);
 
   return null;
 }
