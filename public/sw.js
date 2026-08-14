@@ -1,4 +1,4 @@
-const CACHE_NAME = 'patria-cache-v1';
+const CACHE_NAME = 'patria-cache-v3';
 const MAP_CACHE_NAME = 'patria-map-tiles-v1';
 const OFFLINE_URL = '/';
 
@@ -65,34 +65,40 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Default caching for same-origin static assets
-  event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-
-      return fetch(event.request)
+  // For HTML navigation requests, use Network-First
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
         .then((response) => {
-          // Don't cache API calls or non-successful responses
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
-          }
-
-          // Cache the fetched response for future offline use
           const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
-          });
-
+          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
           return response;
         })
         .catch(() => {
-          // If network fails and no cache exists, return offline fallback for navigation
-          if (event.request.mode === 'navigate') {
-            return caches.match(OFFLINE_URL);
+          return caches.match(event.request).then((cached) => cached || caches.match(OFFLINE_URL));
+        })
+    );
+    return;
+  }
+
+  // Default caching for other same-origin static assets: Cache-First
+  event.respondWith(
+    caches.match(event.request).then((cachedResponse) => {
+      if (cachedResponse) {
+        // Fetch in background to update cache (Stale-While-Revalidate)
+        fetch(event.request).then((response) => {
+          if (response && response.status === 200 && response.type === 'basic') {
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response));
           }
-        });
+        }).catch(() => {});
+        return cachedResponse;
+      }
+      return fetch(event.request).then((response) => {
+        if (!response || response.status !== 200 || response.type !== 'basic') return response;
+        const responseToCache = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
+        return response;
+      });
     })
   );
 });
