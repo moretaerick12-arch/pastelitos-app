@@ -241,10 +241,10 @@ export default function RutaPage() {
             }
 
             return (
-              <div className="flex-1 w-full rounded-xl overflow-hidden shadow-sm border border-slate-100 relative">
+              <div className="flex-1 w-full rounded-xl overflow-hidden shadow-sm border border-slate-100 relative min-h-[400px]">
                 <Map 
                   markers={mapMarkers} 
-                  className="h-full w-full" 
+                  className="absolute inset-0 w-full h-full" 
                   zoom={14}
                   osrmRoute={osrmRoute}
                 />
