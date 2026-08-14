@@ -210,19 +210,28 @@ export default function RutaPage() {
       </div>
 
       {activeTab === 'mapa' && (
-        <div className="flex-1 flex flex-col relative h-[calc(100vh-160px)] min-h-[500px]">
+        <div className="w-full h-[calc(100vh-230px)] min-h-[460px] relative rounded-2xl overflow-hidden shadow-sm border border-slate-100 mb-6">
           {/* Filters Toggle Overlay */}
-          <div className="absolute top-4 right-4 z-10">
+          <div className="absolute top-3 right-3 z-[1000]">
             <button
               onClick={() => setShowAllClients(!showAllClients)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-xl text-xs font-bold shadow-md transition-colors ${showAllClients ? 'bg-white text-slate-700 hover:bg-slate-50' : 'bg-amber-500 text-white hover:bg-amber-600'}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold shadow-md transition-colors ${showAllClients ? 'bg-white text-slate-700 hover:bg-slate-50' : 'bg-amber-500 text-white hover:bg-amber-600'}`}
             >
               <Filter size={14} />
               {showAllClients ? 'Todos' : 'Pendientes'}
             </button>
           </div>
 
-          {/* Map */}
+          {/* Route Meta Floating Panel */}
+          {routeMeta && (
+            <div className="absolute top-3 left-3 z-[1000] bg-white/95 backdrop-blur px-3.5 py-1.5 rounded-xl shadow-md border border-slate-100">
+              <p className="text-xs font-bold text-slate-800">Ruta Estimada</p>
+              <p className="text-[11px] font-medium text-slate-500">
+                {(routeMeta.distance / 1000).toFixed(1)} km • {Math.round(routeMeta.duration / 60)} min
+              </p>
+            </div>
+          )}
+
           {(() => {
             let mapMarkers: MapMarker[] = clients
               .filter(c => c.lat && c.lng)
@@ -241,24 +250,12 @@ export default function RutaPage() {
             }
 
             return (
-              <div className="flex-1 w-full rounded-xl overflow-hidden shadow-sm border border-slate-100 relative min-h-[400px]">
-                <Map 
-                  markers={mapMarkers} 
-                  className="absolute inset-0 w-full h-full" 
-                  zoom={14}
-                  osrmRoute={osrmRoute}
-                />
-                
-                {/* Route Meta Floating Panel */}
-                {routeMeta && (
-                  <div className="absolute top-4 left-4 z-10 bg-white/95 backdrop-blur px-4 py-2 rounded-xl shadow-md border border-slate-100">
-                    <p className="text-sm font-bold text-slate-800">Ruta Estimada</p>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">
-                      {(routeMeta.distance / 1000).toFixed(1)} km • {Math.round(routeMeta.duration / 60)} min
-                    </p>
-                  </div>
-                )}
-              </div>
+              <Map 
+                markers={mapMarkers} 
+                className="w-full h-full min-h-[460px]" 
+                zoom={14}
+                osrmRoute={osrmRoute}
+              />
             );
           })()}
         </div>

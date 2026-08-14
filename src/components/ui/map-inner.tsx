@@ -72,26 +72,29 @@ function CenterMapControl({ userLocation }: { userLocation: [number, number] | n
   );
 }
 
-export default function MapInner({ markers, className = "h-[400px] w-full rounded-xl z-0", zoom = 13, onClick, onMarkerClick, osrmRoute }: MapInnerProps) {
+export default function MapInner({ markers, className = "h-[450px] w-full rounded-xl z-0", zoom = 13, onClick, onMarkerClick, osrmRoute }: MapInnerProps) {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
   useEffect(() => {
-    // Apply icon fix globally once loaded
-    delete (L.Icon.Default.prototype as any)._getIconUrl;
-    L.Icon.Default.mergeOptions({
-      iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-      iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-      shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
-    });
+    try {
+      delete (L.Icon.Default.prototype as any)._getIconUrl;
+      L.Icon.Default.mergeOptions({
+        iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+        iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+        shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+      });
+    } catch (e) {
+      console.warn("Leaflet icon merge warning:", e);
+    }
 
     // Start geolocation tracking
-    if ("geolocation" in navigator) {
+    if (typeof window !== "undefined" && "geolocation" in navigator) {
       const watchId = navigator.geolocation.watchPosition(
         (position) => {
           setUserLocation([position.coords.latitude, position.coords.longitude]);
         },
         (error) => {
-          console.error("Error watching position", error);
+          console.warn("Geolocation watch warning:", error);
         },
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
@@ -110,12 +113,12 @@ export default function MapInner({ markers, className = "h-[400px] w-full rounde
   const routeCoordinates = markers.map(m => [m.lat, m.lng] as [number, number]);
 
   return (
-    <div className={className + " relative"}>
+    <div className={`relative ${className}`} style={{ minHeight: "400px", height: "100%", width: "100%" }}>
       <MapContainer 
         center={defaultCenter} 
         zoom={zoom} 
         scrollWheelZoom={true} 
-        style={{ height: "100%", width: "100%", zIndex: 0 }}
+        style={{ height: "100%", width: "100%", minHeight: "400px", zIndex: 0 }}
         className="rounded-xl overflow-hidden"
       >
         <TileLayer
