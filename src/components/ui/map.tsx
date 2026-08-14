@@ -28,8 +28,9 @@ interface MapProps {
   zoom?: number;
   onClick?: (lat: number, lng: number) => void;
   onMarkerClick?: (id: string) => void;
+  osrmRoute?: [number, number][];
 }
 
-export function Map({ markers, className, zoom = 13, onClick, onMarkerClick }: MapProps) {
-  return <MapInner markers={markers} className={className} zoom={zoom} onClick={onClick} onMarkerClick={onMarkerClick} />;
+export function Map({ markers, className, zoom = 13, onClick, onMarkerClick, osrmRoute }: MapProps) {
+  return <MapInner markers={markers} className={className} zoom={zoom} onClick={onClick} onMarkerClick={onMarkerClick} osrmRoute={osrmRoute} />;
 }

@@ -39,6 +39,7 @@ interface MapInnerProps {
   zoom?: number;
   onClick?: (lat: number, lng: number) => void;
   onMarkerClick?: (id: string) => void;
+  osrmRoute?: [number, number][];
 }
 
 function MapEvents({ onClick }: { onClick?: (lat: number, lng: number) => void }) {
@@ -71,7 +72,7 @@ function CenterMapControl({ userLocation }: { userLocation: [number, number] | n
   );
 }
 
-export default function MapInner({ markers, className = "h-[400px] w-full rounded-xl z-0", zoom = 13, onClick, onMarkerClick }: MapInnerProps) {
+export default function MapInner({ markers, className = "h-[400px] w-full rounded-xl z-0", zoom = 13, onClick, onMarkerClick, osrmRoute }: MapInnerProps) {
   const [userLocation, setUserLocation] = useState<[number, number] | null>(null);
 
   useEffect(() => {
@@ -123,9 +124,11 @@ export default function MapInner({ markers, className = "h-[400px] w-full rounde
         />
         <MapEvents onClick={onClick} />
         
-        {routeCoordinates.length > 1 && (
+        {osrmRoute && osrmRoute.length > 1 ? (
+          <Polyline positions={osrmRoute} color="#f59e0b" weight={5} />
+        ) : routeCoordinates.length > 1 ? (
           <Polyline positions={routeCoordinates} color="#f59e0b" weight={4} dashArray="10, 10" />
-        )}
+        ) : null}
 
         {markers.map((marker) => (
           <Marker 

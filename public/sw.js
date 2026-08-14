@@ -1,4 +1,5 @@
 const CACHE_NAME = 'patria-cache-v1';
+const MAP_CACHE_NAME = 'patria-map-tiles-v1';
 const OFFLINE_URL = '/';
 
 self.addEventListener('install', (event) => {
@@ -7,7 +8,6 @@ self.addEventListener('install', (event) => {
       return cache.addAll([
         '/',
         '/manifest.json',
-        // Next.js will cache JS chunks automatically, but we can pre-cache main entrypoints if needed
       ]);
     })
   );
@@ -19,7 +19,7 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames
-          .filter((name) => name !== CACHE_NAME)
+          .filter((name) => name !== CACHE_NAME && name !== MAP_CACHE_NAME)
           .map((name) => caches.delete(name))
       );
     })
@@ -27,18 +27,45 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Cache-First Strategy for static assets, Network-First for navigation
 self.addEventListener('fetch', (event) => {
-  // Skip cross-origin requests
-  if (!event.request.url.startsWith(self.location.origin)) {
+  const url = event.request.url;
+
+  // Handle Supabase API requests - always network only
+  if (url.includes('supabase.co')) {
     return;
   }
 
-  // Handle Supabase API requests - always network only, offline DB will handle failures
-  if (event.request.url.includes('supabase.co')) {
+  // Handle Map Tiles Caching (Cross-Origin)
+  if (url.match(/tile\.openstreetmap\.org/)) {
+    event.respondWith(
+      caches.match(event.request).then((cachedResponse) => {
+        if (cachedResponse) {
+          return cachedResponse;
+        }
+        return fetch(event.request).then((response) => {
+          if (!response || response.status !== 200) {
+            return response;
+          }
+          const responseToCache = response.clone();
+          caches.open(MAP_CACHE_NAME).then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+          return response;
+        }).catch(() => {
+          // If offline and no cache, just fail silently for tiles
+          return new Response('', { status: 408, statusText: 'Request timeout' });
+        });
+      })
+    );
     return;
   }
 
+  // Skip other cross-origin requests
+  if (!url.startsWith(self.location.origin)) {
+    return;
+  }
+
+  // Default caching for same-origin static assets
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
