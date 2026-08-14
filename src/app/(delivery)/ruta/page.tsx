@@ -173,15 +173,7 @@ export default function RutaPage() {
   const visitedCount = clients.filter(c => c.visited).length;
   const progressPercent = clients.length > 0 ? Math.round((visitedCount / clients.length) * 100) : 0;
 
-          <Link href="/ruta/crear" className="bg-slate-800 hover:bg-slate-900 text-white font-medium py-3 px-6 rounded-xl flex items-center justify-center gap-2 transition-colors w-full">
-            <MapPin size={20} />
-            Crear Mi Propia Ruta
-          </Link>
-        </div>
-      </div>
-      </div>
-    );
-  }
+
 
   return (
     <div className="flex flex-col h-full bg-slate-50 -mx-4 -mt-4 px-4 pt-4 sm:mx-0 sm:mt-0 sm:px-0 sm:pt-0">
