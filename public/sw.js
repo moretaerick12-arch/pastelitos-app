@@ -1,6 +1,5 @@
-const CACHE_NAME = 'patria-cache-v3';
-const MAP_CACHE_NAME = 'patria-map-tiles-v1';
-const OFFLINE_URL = '/';
+const CACHE_NAME = 'patria-cache-v4';
+const MAP_CACHE_NAME = 'patria-map-tiles-v2';
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -8,7 +7,10 @@ self.addEventListener('install', (event) => {
       return cache.addAll([
         '/',
         '/manifest.json',
-      ]);
+        '/icon.svg',
+      ]).catch(() => {
+        // Ignore cache failure during install
+      });
     })
   );
   self.skipWaiting();
@@ -28,77 +30,93 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
-  const url = event.request.url;
+  const req = event.request;
+  const url = req.url;
 
-  // Handle Supabase API requests - always network only
-  if (url.includes('supabase.co')) {
+  // 1. Only intercept GET requests
+  if (req.method !== 'GET') {
     return;
   }
 
-  // Handle Map Tiles Caching (Cross-Origin)
-  if (url.match(/tile\.openstreetmap\.org/)) {
+  // 2. Bypass Supabase and external API requests completely
+  if (url.includes('supabase.co') || url.includes('/api/')) {
+    return;
+  }
+
+  // 3. Bypass Next.js internal router requests (_rsc, _next/data, etc.)
+  if (url.includes('_rsc=') || url.includes('/_next/static/webpack') || url.includes('/_next/data/')) {
+    return;
+  }
+
+  // 4. Handle OpenStreetMap Map Tiles Caching
+  if (url.includes('tile.openstreetmap.org')) {
     event.respondWith(
-      caches.match(event.request).then((cachedResponse) => {
+      caches.match(req).then((cachedResponse) => {
         if (cachedResponse) {
           return cachedResponse;
         }
-        return fetch(event.request).then((response) => {
-          if (!response || response.status !== 200) {
+        return fetch(req)
+          .then((response) => {
+            if (response && response.status === 200) {
+              const clone = response.clone();
+              caches.open(MAP_CACHE_NAME).then((cache) => cache.put(req, clone)).catch(() => {});
+            }
             return response;
-          }
-          const responseToCache = response.clone();
-          caches.open(MAP_CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseToCache);
+          })
+          .catch(() => {
+            return new Response('', { status: 408, statusText: 'Timeout' });
           });
-          return response;
-        }).catch(() => {
-          // If offline and no cache, just fail silently for tiles
-          return new Response('', { status: 408, statusText: 'Request timeout' });
-        });
       })
     );
     return;
   }
 
-  // Skip other cross-origin requests
+  // 5. Bypass other cross-origin requests
   if (!url.startsWith(self.location.origin)) {
     return;
   }
 
-  // For HTML navigation requests, use Network-First
-  if (event.request.mode === 'navigate') {
+  // 6. Navigation requests (HTML pages) - Network-first with offline fallback
+  if (req.mode === 'navigate') {
     event.respondWith(
-      fetch(event.request)
+      fetch(req)
         .then((response) => {
-          const responseToCache = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone)).catch(() => {});
+          }
           return response;
         })
         .catch(() => {
-          return caches.match(event.request).then((cached) => cached || caches.match(OFFLINE_URL));
+          return caches.match(req).then((cached) => cached || caches.match('/') || Response.error());
         })
     );
     return;
   }
 
-  // Default caching for other same-origin static assets: Cache-First
+  // 7. Static assets (images, css, js) - Cache-first with network fallback
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        // Fetch in background to update cache (Stale-While-Revalidate)
-        fetch(event.request).then((response) => {
-          if (response && response.status === 200 && response.type === 'basic') {
-            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, response));
+    caches.match(req).then((cached) => {
+      if (cached) {
+        // Background revalidate
+        fetch(req).then((res) => {
+          if (res && res.status === 200) {
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, res)).catch(() => {});
           }
         }).catch(() => {});
-        return cachedResponse;
+        return cached;
       }
-      return fetch(event.request).then((response) => {
-        if (!response || response.status !== 200 || response.type !== 'basic') return response;
-        const responseToCache = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, responseToCache));
-        return response;
-      });
+      return fetch(req)
+        .then((response) => {
+          if (response && response.status === 200) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone)).catch(() => {});
+          }
+          return response;
+        })
+        .catch(() => {
+          return new Response('', { status: 408, statusText: 'Offline asset' });
+        });
     })
   );
 });
