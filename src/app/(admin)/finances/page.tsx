@@ -100,12 +100,7 @@ export default function FinancesPage() {
     setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 1));
   };
 
-  const setSpecificMonth = (monthIdx: number) => {
-    setSelectedMonth(new Date(2026, monthIdx, 1));
-  };
-
   const monthName = selectedMonth.toLocaleDateString("es-DO", { month: "long", year: "numeric" });
-  const currentMonthIdx = selectedMonth.getMonth();
 
   const handleDeleteExpense = async (id: string) => {
     if (!confirm("¿Seguro que deseas eliminar este registro de gasto?")) return;
@@ -172,56 +167,22 @@ export default function FinancesPage() {
 
       {/* Date & Period Selection Bar */}
       <div className="bg-[#181824] p-4 rounded-2xl border border-white/10 shadow-xl flex flex-col xl:flex-row xl:items-center justify-between gap-4">
-        {/* Month Selector & Quick Chips */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center gap-1 bg-[#101018] px-2.5 py-1.5 rounded-xl border border-white/5">
-            <button
-              onClick={handlePrevMonth}
-              className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-            </button>
-            <span className="font-bold text-white capitalize min-w-[130px] text-center text-xs">
-              {monthName}
-            </span>
-            <button
-              onClick={handleNextMonth}
-              className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          </div>
-
-          {/* Quick Month Chips from Excel */}
+        {/* Month Selector */}
+        <div className="flex items-center gap-2 bg-[#101018] px-3 py-1.5 rounded-xl border border-white/5">
           <button
-            onClick={() => setSpecificMonth(6)} // July
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-              currentMonthIdx === 6
-                ? "bg-amber-500 text-black border-amber-400 font-bold"
-                : "bg-white/5 text-gray-400 border-white/5 hover:text-white hover:bg-white/10"
-            }`}
+            onClick={handlePrevMonth}
+            className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
           >
-            Julio 2026 (Hoja 1)
+            <ChevronLeft className="w-5 h-5" />
           </button>
+          <span className="font-semibold text-white capitalize min-w-[150px] text-center text-sm">
+            {monthName}
+          </span>
           <button
-            onClick={() => setSpecificMonth(7)} // August
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-              currentMonthIdx === 7
-                ? "bg-amber-500 text-black border-amber-400 font-bold"
-                : "bg-white/5 text-gray-400 border-white/5 hover:text-white hover:bg-white/10"
-            }`}
+            onClick={handleNextMonth}
+            className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
           >
-            Agosto 2026 (Hoja 2)
-          </button>
-          <button
-            onClick={() => setSpecificMonth(8)} // September
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-              currentMonthIdx === 8
-                ? "bg-amber-500 text-black border-amber-400 font-bold"
-                : "bg-white/5 text-gray-400 border-white/5 hover:text-white hover:bg-white/10"
-            }`}
-          >
-            Septiembre 2026 (Hoja 3)
+            <ChevronRight className="w-5 h-5" />
           </button>
         </div>
 
