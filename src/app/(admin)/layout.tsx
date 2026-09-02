@@ -2,7 +2,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { LayoutDashboard, MapPin, Store, Package, DollarSign, BarChart3, Box, Menu, X, User, LogOut } from 'lucide-react';
+import { LayoutDashboard, MapPin, Store, Package, DollarSign, BarChart3, Box, Users, Menu, X, User, LogOut } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
 
 const navItems = [
@@ -11,6 +11,7 @@ const navItems = [
   { name: 'Clientes', href: '/clients', icon: Store },
   { name: 'Inventario', href: '/inventory', icon: Package },
   { name: 'Finanzas', href: '/finances', icon: DollarSign },
+  { name: 'Usuarios', href: '/users', icon: Users },
   { name: 'Reportes', href: '/reports', icon: BarChart3 },
   { name: 'Activos', href: '/assets', icon: Box },
 ];
