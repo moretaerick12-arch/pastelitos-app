@@ -19,7 +19,8 @@ import {
   ArrowUpRight, 
   ArrowDownRight,
   PieChart,
-  RefreshCw
+  RefreshCw,
+  TableProperties
 } from "lucide-react";
 import { financeService, FortnightlyReportData } from "@/lib/services/financeService";
 import { ExpenseDialog } from "@/components/accounting/expense-dialog";
@@ -28,7 +29,7 @@ import { createClient } from "@/lib/supabase/client";
 type PeriodPreset = "q1" | "q2" | "month" | "custom";
 
 export default function FinancesPage() {
-  const [activeTab, setActiveTab] = useState<"summary" | "expenses" | "receivables" | "transactions">("summary");
+  const [activeTab, setActiveTab] = useState<"summary" | "matrix" | "expenses" | "receivables" | "transactions">("summary");
   const [selectedMonth, setSelectedMonth] = useState<Date>(() => new Date());
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("q1");
   const [customStartDate, setCustomStartDate] = useState<string>("");
@@ -140,7 +141,7 @@ export default function FinancesPage() {
             Finanzas y Contabilidad
           </h1>
           <p className="text-gray-400 mt-1 text-sm">
-            Control de ventas por repartidor, gastos operativos, beneficio neto y fiao
+            Control quincenal de ventas, matriz de choferes, gastos y beneficio neto
           </p>
         </div>
 
@@ -352,6 +353,19 @@ export default function FinancesPage() {
           <FileSpreadsheet className="w-4 h-4" />
           Resumen Quincenal & Choferes
         </button>
+
+        <button
+          onClick={() => setActiveTab("matrix")}
+          className={`px-4 py-3 font-semibold text-sm border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
+            activeTab === "matrix"
+              ? "border-amber-500 text-amber-400 bg-white/5 rounded-t-xl"
+              : "border-transparent text-gray-400 hover:text-white"
+          }`}
+        >
+          <TableProperties className="w-4 h-4" />
+          Matriz Diaria Excel (Día por Día)
+        </button>
+
         <button
           onClick={() => setActiveTab("expenses")}
           className={`px-4 py-3 font-semibold text-sm border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
@@ -363,6 +377,7 @@ export default function FinancesPage() {
           <Receipt className="w-4 h-4" />
           Gastos Operativos ({reportData?.expenses.length || 0})
         </button>
+
         <button
           onClick={() => setActiveTab("receivables")}
           className={`px-4 py-3 font-semibold text-sm border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
@@ -374,6 +389,7 @@ export default function FinancesPage() {
           <Wallet className="w-4 h-4" />
           Cuentas por Cobrar / Fiao
         </button>
+
         <button
           onClick={() => setActiveTab("transactions")}
           className={`px-4 py-3 font-semibold text-sm border-b-2 flex items-center gap-2 transition-colors whitespace-nowrap ${
@@ -390,27 +406,27 @@ export default function FinancesPage() {
       {/* TAB 1: RESUMEN QUINCENAL & CHOFERES */}
       {activeTab === "summary" && (
         <div className="space-y-6">
-          {/* WhatsApp Style Math Banner */}
+          {/* WhatsApp / Excel Math Banner */}
           <div className="bg-gradient-to-r from-[#1f1f2e] via-[#181824] to-[#1f1f2e] border border-amber-500/20 rounded-2xl p-6 shadow-xl flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="space-y-1 text-center md:text-left">
               <span className="text-xs font-bold text-amber-400 uppercase tracking-wider">Cálculo de la Quincena</span>
-              <h3 className="text-lg font-bold text-white">Fórmula de Libreta Contable</h3>
-              <p className="text-xs text-gray-400">Total Ventas Choferes menos Gastos Operativos de Producción</p>
+              <h3 className="text-lg font-bold text-white">Fórmula de Libreta y Excel</h3>
+              <p className="text-xs text-gray-400">Total Ventas Choferes menos Gastos Operativos = Ganancia Neta</p>
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-4 text-center">
               <div className="bg-[#101018] px-4 py-2.5 rounded-xl border border-white/5">
-                <p className="text-[11px] text-gray-400">Ventas Totales</p>
+                <p className="text-[11px] text-gray-400">Total Vendido</p>
                 <p className="text-base font-bold text-emerald-400">{formatCurrency(reportData?.totalSales || 0)}</p>
               </div>
               <span className="text-xl font-bold text-gray-500">−</span>
               <div className="bg-[#101018] px-4 py-2.5 rounded-xl border border-white/5">
-                <p className="text-[11px] text-gray-400">Gastos Totales</p>
+                <p className="text-[11px] text-gray-400">Total Gastos</p>
                 <p className="text-base font-bold text-red-400">{formatCurrency(reportData?.totalExpenses || 0)}</p>
               </div>
               <span className="text-xl font-bold text-gray-500">=</span>
               <div className="bg-amber-500/10 px-5 py-2.5 rounded-xl border border-amber-500/30">
-                <p className="text-[11px] text-amber-300 font-semibold">Beneficio Limpio</p>
+                <p className="text-[11px] text-amber-300 font-semibold">Ganancias Netas</p>
                 <p className="text-lg font-black text-amber-400">{formatCurrency(reportData?.netProfit || 0)}</p>
               </div>
             </div>
@@ -544,7 +560,105 @@ export default function FinancesPage() {
         </div>
       )}
 
-      {/* TAB 2: GASTOS OPERATIVOS */}
+      {/* TAB 2: MATRIZ DIARIA ESTILO EXCEL */}
+      {activeTab === "matrix" && (
+        <div className="bg-[#181824] rounded-2xl border border-white/10 shadow-xl overflow-hidden flex flex-col">
+          <div className="p-5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h3 className="font-bold text-white text-base flex items-center gap-2">
+                <TableProperties className="w-5 h-5 text-amber-400" />
+                Matriz Diaria de Ventas y Gastos ({dateRange.label})
+              </h3>
+              <p className="text-xs text-gray-400 mt-0.5">
+                Estructura idéntica a tu hoja de Excel: desglose por chofer, total diario y neto
+              </p>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead className="bg-[#1f1f2e] text-gray-400 uppercase border-b border-white/10">
+                <tr>
+                  <th className="p-3 font-bold border-r border-white/5">Fecha</th>
+                  {(reportData?.activeDriverNames || ['Joelito', 'Nene', 'Meloso']).map((driverName) => (
+                    <th key={driverName} className="p-3 font-bold text-right border-r border-white/5">
+                      {driverName}
+                    </th>
+                  ))}
+                  <th className="p-3 font-bold text-right bg-emerald-500/10 text-emerald-400 border-r border-white/5">
+                    Total del Día
+                  </th>
+                  <th className="p-3 font-bold text-right bg-red-500/10 text-red-400 border-r border-white/5">
+                    Gastos del Día
+                  </th>
+                  <th className="p-3 font-bold text-right bg-amber-500/10 text-amber-400">
+                    Neto del Día
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {reportData?.dailyMatrix.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="p-8 text-center text-gray-500">
+                      No hay registros para este período.
+                    </td>
+                  </tr>
+                ) : (
+                  reportData?.dailyMatrix.map((row) => (
+                    <tr key={row.dateKey} className="hover:bg-white/5 transition-colors">
+                      <td className="p-3 font-semibold text-gray-300 border-r border-white/5 whitespace-nowrap">
+                        {row.dayLabel}
+                      </td>
+                      {(reportData?.activeDriverNames || ['Joelito', 'Nene', 'Meloso']).map((driverName) => {
+                        const val = row.driverSales[driverName] || 0;
+                        return (
+                          <td key={driverName} className="p-3 text-right border-r border-white/5 font-medium text-white">
+                            {val > 0 ? formatCurrency(val) : <span className="text-gray-600">-</span>}
+                          </td>
+                        );
+                      })}
+                      <td className="p-3 text-right font-bold text-emerald-400 border-r border-white/5 bg-emerald-500/5">
+                        {row.totalDaySales > 0 ? formatCurrency(row.totalDaySales) : <span className="text-gray-600">-</span>}
+                      </td>
+                      <td className="p-3 text-right font-bold text-red-400 border-r border-white/5 bg-red-500/5">
+                        {row.dayExpenses > 0 ? formatCurrency(row.dayExpenses) : <span className="text-gray-600">-</span>}
+                      </td>
+                      <td className={`p-3 text-right font-black bg-amber-500/5 ${row.dayNet >= 0 ? 'text-amber-400' : 'text-red-400'}`}>
+                        {formatCurrency(row.dayNet)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+              {/* Table Footer Totals */}
+              <tfoot className="bg-[#1f1f2e] font-bold border-t-2 border-white/10 text-xs">
+                <tr>
+                  <td className="p-3 text-white border-r border-white/5">TOTALES</td>
+                  {(reportData?.activeDriverNames || ['Joelito', 'Nene', 'Meloso']).map((driverName) => {
+                    const sum = reportData?.dailyMatrix.reduce((acc, curr) => acc + (curr.driverSales[driverName] || 0), 0) || 0;
+                    return (
+                      <td key={driverName} className="p-3 text-right text-white border-r border-white/5">
+                        {formatCurrency(sum)}
+                      </td>
+                    );
+                  })}
+                  <td className="p-3 text-right text-emerald-400 border-r border-white/5 bg-emerald-500/10">
+                    {formatCurrency(reportData?.totalSales || 0)}
+                  </td>
+                  <td className="p-3 text-right text-red-400 border-r border-white/5 bg-red-500/10">
+                    {formatCurrency(reportData?.totalExpenses || 0)}
+                  </td>
+                  <td className="p-3 text-right text-amber-400 font-black bg-amber-500/10 text-sm">
+                    {formatCurrency(reportData?.netProfit || 0)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* TAB 3: GASTOS OPERATIVOS */}
       {activeTab === "expenses" && (
         <div className="bg-[#181824] rounded-2xl border border-white/10 shadow-xl overflow-hidden flex flex-col">
           <div className="p-5 border-b border-white/10 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -622,7 +736,7 @@ export default function FinancesPage() {
         </div>
       )}
 
-      {/* TAB 3: CUENTAS POR COBRAR / FIAO */}
+      {/* TAB 4: CUENTAS POR COBRAR / FIAO */}
       {activeTab === "receivables" && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Fiao by Driver */}
@@ -721,7 +835,7 @@ export default function FinancesPage() {
         </div>
       )}
 
-      {/* TAB 4: HISTORIAL DE TRANSACCIONES & AUDITORÍA */}
+      {/* TAB 5: HISTORIAL DE TRANSACCIONES & AUDITORÍA */}
       {activeTab === "transactions" && (
         <div className="bg-[#181824] rounded-2xl border border-white/10 shadow-xl overflow-hidden flex flex-col">
           <div className="p-5 border-b border-white/10 flex items-center justify-between">

@@ -19,6 +19,15 @@ export interface ExpenseGroupSummary {
   percentage: number;
 }
 
+export interface DailyMatrixRow {
+  dateKey: string;
+  dayLabel: string;
+  driverSales: Record<string, number>;
+  totalDaySales: number;
+  dayExpenses: number;
+  dayNet: number;
+}
+
 export interface FortnightlyReportData {
   startDate: string;
   endDate: string;
@@ -32,6 +41,11 @@ export interface FortnightlyReportData {
   driverSummaries: DriverSaleSummary[];
   expenseGroups: ExpenseGroupSummary[];
   expenses: CashFlow[];
+  dailyMatrix: DailyMatrixRow[];
+  activeDriverNames: string[];
+  monthQ1Net?: number;
+  monthQ2Net?: number;
+  monthTotalNet?: number;
   recentTransactions: Array<{
     id: string;
     date: string;
@@ -49,16 +63,21 @@ const DEFAULT_EXPENSE_SUGGESTIONS = [
   'Sacos de Harina',
   'Queso',
   'Vegetales y Especias',
+  'Carne de Res',
+  'Carne de Pollo',
   'Pago Nene',
   'Pago Joelito',
   'Pago Meloso',
   'Sueldo Empleados',
-  'Materiales y Empaques',
+  'Materiales / Fundas / Papel encerado',
   'Aceite',
   'Mantenimiento Vehículo',
   'Alquiler de Local',
-  'Préstamo',
+  'Préstamo Joel',
+  'Préstamo Nene',
+  'Préstamo Meloso',
   'Electricidad / Servicios',
+  'Mercado',
   'Otros Gastos'
 ];
 
@@ -152,7 +171,7 @@ export const financeService = {
   },
 
   /**
-   * Comprehensive Fortnightly / Period Financial Calculation
+   * Comprehensive Fortnightly / Period Financial Calculation matching Excel Matrix
    */
   async getFortnightlyReport(startDate: string, endDate: string): Promise<FortnightlyReportData> {
     const supabase = createClient();
@@ -235,9 +254,14 @@ export const financeService = {
       totalFiao: number;
     }>();
 
-    // Initialize all drivers
+    // Default known drivers from Excel
+    const knownDriverNames = ['Joelito', 'Nene', 'Meloso'];
+    const activeDriverNameSet = new Set<string>(knownDriverNames);
+
+    // Initialize drivers
     drivers.forEach((driver: any) => {
       const name = `${driver.first_name || ''} ${driver.last_name || ''}`.trim() || 'Repartidor';
+      activeDriverNameSet.add(name);
       driverMap.set(driver.id, {
         driverId: driver.id,
         driverName: name,
@@ -249,10 +273,18 @@ export const financeService = {
       });
     });
 
+    // Daily Matrix Map: dateString -> { [driverName]: amount, expenses: amount }
+    const matrixMap = new Map<string, {
+      driverSales: Record<string, number>;
+      totalSales: number;
+      dayExpenses: number;
+    }>();
+
     sales.forEach((s: any) => {
       const amount = Number(s.total_amount || 0);
       const isCredit = s.sale_type === 'credito';
       const unpaidAmount = Math.max(0, amount - Number(s.paid_amount || 0));
+      const dateKey = (s.created_at || '').split('T')[0];
 
       totalSales += amount;
       if (isCredit) {
@@ -263,11 +295,12 @@ export const financeService = {
 
       const driverId = s.repartidor_id || 'unknown';
       let driverEntry = driverMap.get(driverId);
+      const dName = s.profiles ? `${s.profiles.first_name || ''} ${s.profiles.last_name || ''}`.trim() : (driverEntry?.driverName || 'Repartidor');
+
       if (!driverEntry) {
-        const dName = s.profiles ? `${s.profiles.first_name || ''} ${s.profiles.last_name || ''}`.trim() : 'Sin Asignar';
         driverEntry = {
           driverId,
-          driverName: dName || 'Repartidor Desconocido',
+          driverName: dName || 'Repartidor',
           cashSales: 0,
           creditSales: 0,
           totalSales: 0,
@@ -277,6 +310,8 @@ export const financeService = {
         driverMap.set(driverId, driverEntry);
       }
 
+      activeDriverNameSet.add(driverEntry.driverName);
+
       if (isCredit) {
         driverEntry.creditSales += amount;
         driverEntry.totalFiao += unpaidAmount;
@@ -285,6 +320,14 @@ export const financeService = {
       }
       driverEntry.totalSales += amount;
       driverEntry.salesCount += 1;
+
+      // Matrix entry
+      if (dateKey) {
+        const mRow = matrixMap.get(dateKey) || { driverSales: {}, totalSales: 0, dayExpenses: 0 };
+        mRow.driverSales[driverEntry.driverName] = (mRow.driverSales[driverEntry.driverName] || 0) + amount;
+        mRow.totalSales += amount;
+        matrixMap.set(dateKey, mRow);
+      }
     });
 
     // Subtract payments collected by each driver from their Fiao in period
@@ -318,6 +361,14 @@ export const financeService = {
       existing.total += amount;
       existing.count += 1;
       categoryMap.set(desc, existing);
+
+      // Add to matrix
+      const dateKey = (exp.transaction_date || '').split('T')[0];
+      if (dateKey) {
+        const mRow = matrixMap.get(dateKey) || { driverSales: {}, totalSales: 0, dayExpenses: 0 };
+        mRow.dayExpenses += amount;
+        matrixMap.set(dateKey, mRow);
+      }
     });
 
     const expenseGroups: ExpenseGroupSummary[] = Array.from(categoryMap.entries())
@@ -328,6 +379,29 @@ export const financeService = {
         percentage: totalExpenses > 0 ? (data.total / totalExpenses) * 100 : 0,
       }))
       .sort((a, b) => b.total - a.total);
+
+    // Build Daily Matrix array sorted chronologically
+    const startObj = new Date(startDate);
+    const endObj = new Date(endDate);
+    const dailyMatrix: DailyMatrixRow[] = [];
+
+    const cur = new Date(startObj);
+    while (cur <= endObj) {
+      const dateKey = cur.toISOString().split('T')[0];
+      const dayData = matrixMap.get(dateKey) || { driverSales: {}, totalSales: 0, dayExpenses: 0 };
+      const dayLabel = cur.toLocaleDateString('es-DO', { day: '2-digit', month: 'short' });
+
+      dailyMatrix.push({
+        dateKey,
+        dayLabel,
+        driverSales: dayData.driverSales,
+        totalDaySales: dayData.totalSales,
+        dayExpenses: dayData.dayExpenses,
+        dayNet: dayData.totalSales - dayData.dayExpenses,
+      });
+
+      cur.setDate(cur.getDate() + 1);
+    }
 
     // Calculate Net Profit & Margins
     const netProfit = totalSales - totalExpenses;
@@ -381,6 +455,8 @@ export const financeService = {
       driverSummaries,
       expenseGroups,
       expenses,
+      dailyMatrix,
+      activeDriverNames: Array.from(activeDriverNameSet),
       recentTransactions
     };
   }
