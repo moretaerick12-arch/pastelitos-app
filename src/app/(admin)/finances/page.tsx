@@ -30,7 +30,8 @@ type PeriodPreset = "q1" | "q2" | "month" | "custom";
 
 export default function FinancesPage() {
   const [activeTab, setActiveTab] = useState<"summary" | "matrix" | "expenses" | "receivables" | "transactions">("summary");
-  const [selectedMonth, setSelectedMonth] = useState<Date>(() => new Date());
+  // Default to Agosto 2026 where the full 2 quincenas with RD$ 82,548 net profit are registered in Excel
+  const [selectedMonth, setSelectedMonth] = useState<Date>(() => new Date(2026, 7, 1)); // 7 = August (0-indexed)
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("q1");
   const [customStartDate, setCustomStartDate] = useState<string>("");
   const [customEndDate, setCustomEndDate] = useState<string>("");
@@ -99,7 +100,12 @@ export default function FinancesPage() {
     setSelectedMonth(new Date(selectedMonth.getFullYear(), selectedMonth.getMonth() + 1, 1));
   };
 
+  const setSpecificMonth = (monthIdx: number) => {
+    setSelectedMonth(new Date(2026, monthIdx, 1));
+  };
+
   const monthName = selectedMonth.toLocaleDateString("es-DO", { month: "long", year: "numeric" });
+  const currentMonthIdx = selectedMonth.getMonth();
 
   const handleDeleteExpense = async (id: string) => {
     if (!confirm("¿Seguro que deseas eliminar este registro de gasto?")) return;
@@ -165,23 +171,57 @@ export default function FinancesPage() {
       </div>
 
       {/* Date & Period Selection Bar */}
-      <div className="bg-[#181824] p-4 rounded-2xl border border-white/10 shadow-xl flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        {/* Month Navigator */}
-        <div className="flex items-center gap-2 bg-[#101018] px-3 py-1.5 rounded-xl border border-white/5">
+      <div className="bg-[#181824] p-4 rounded-2xl border border-white/10 shadow-xl flex flex-col xl:flex-row xl:items-center justify-between gap-4">
+        {/* Month Selector & Quick Chips */}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1 bg-[#101018] px-2.5 py-1.5 rounded-xl border border-white/5">
+            <button
+              onClick={handlePrevMonth}
+              className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <span className="font-bold text-white capitalize min-w-[130px] text-center text-xs">
+              {monthName}
+            </span>
+            <button
+              onClick={handleNextMonth}
+              className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          {/* Quick Month Chips from Excel */}
           <button
-            onClick={handlePrevMonth}
-            className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            onClick={() => setSpecificMonth(6)} // July
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+              currentMonthIdx === 6
+                ? "bg-amber-500 text-black border-amber-400 font-bold"
+                : "bg-white/5 text-gray-400 border-white/5 hover:text-white hover:bg-white/10"
+            }`}
           >
-            <ChevronLeft className="w-5 h-5" />
+            Julio 2026 (Hoja 1)
           </button>
-          <span className="font-semibold text-white capitalize min-w-[150px] text-center text-sm">
-            {monthName}
-          </span>
           <button
-            onClick={handleNextMonth}
-            className="p-1 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            onClick={() => setSpecificMonth(7)} // August
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+              currentMonthIdx === 7
+                ? "bg-amber-500 text-black border-amber-400 font-bold"
+                : "bg-white/5 text-gray-400 border-white/5 hover:text-white hover:bg-white/10"
+            }`}
           >
-            <ChevronRight className="w-5 h-5" />
+            Agosto 2026 (Hoja 2)
+          </button>
+          <button
+            onClick={() => setSpecificMonth(8)} // September
+            className={`px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
+              currentMonthIdx === 8
+                ? "bg-amber-500 text-black border-amber-400 font-bold"
+                : "bg-white/5 text-gray-400 border-white/5 hover:text-white hover:bg-white/10"
+            }`}
+          >
+            Septiembre 2026 (Hoja 3)
           </button>
         </div>
 
@@ -580,7 +620,7 @@ export default function FinancesPage() {
               <thead className="bg-[#1f1f2e] text-gray-400 uppercase border-b border-white/10">
                 <tr>
                   <th className="p-3 font-bold border-r border-white/5">Fecha</th>
-                  {(reportData?.activeDriverNames || ['Joelito', 'Nene', 'Meloso']).map((driverName) => (
+                  {(reportData?.activeDriverNames || ['Joelito', 'Nene', 'Meloso', 'Laly']).map((driverName) => (
                     <th key={driverName} className="p-3 font-bold text-right border-r border-white/5">
                       {driverName}
                     </th>
@@ -609,7 +649,7 @@ export default function FinancesPage() {
                       <td className="p-3 font-semibold text-gray-300 border-r border-white/5 whitespace-nowrap">
                         {row.dayLabel}
                       </td>
-                      {(reportData?.activeDriverNames || ['Joelito', 'Nene', 'Meloso']).map((driverName) => {
+                      {(reportData?.activeDriverNames || ['Joelito', 'Nene', 'Meloso', 'Laly']).map((driverName) => {
                         const val = row.driverSales[driverName] || 0;
                         return (
                           <td key={driverName} className="p-3 text-right border-r border-white/5 font-medium text-white">
@@ -634,7 +674,7 @@ export default function FinancesPage() {
               <tfoot className="bg-[#1f1f2e] font-bold border-t-2 border-white/10 text-xs">
                 <tr>
                   <td className="p-3 text-white border-r border-white/5">TOTALES</td>
-                  {(reportData?.activeDriverNames || ['Joelito', 'Nene', 'Meloso']).map((driverName) => {
+                  {(reportData?.activeDriverNames || ['Joelito', 'Nene', 'Meloso', 'Laly']).map((driverName) => {
                     const sum = reportData?.dailyMatrix.reduce((acc, curr) => acc + (curr.driverSales[driverName] || 0), 0) || 0;
                     return (
                       <td key={driverName} className="p-3 text-right text-white border-r border-white/5">
