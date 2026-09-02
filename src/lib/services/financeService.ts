@@ -180,7 +180,7 @@ export const financeService = {
   async getAccountsReceivable() {
     const supabase = createClient();
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('clients')
         .select('*')
         .gt('current_balance', 0)
@@ -190,7 +190,7 @@ export const financeService = {
         return { data, error: null };
       }
     } catch {
-      // fallback to historical
+      // fallback
     }
     return { data: HISTORICAL_CLIENTS, error: null };
   },
@@ -241,7 +241,7 @@ export const financeService = {
       // fallback
     }
 
-    // Merge with historical data for the date range
+    // Filter historical data for the requested date range
     const startMs = new Date(startDate).getTime();
     const endMs = new Date(endDate).getTime();
 
@@ -255,8 +255,23 @@ export const financeService = {
       return ms >= startMs && ms <= endMs;
     });
 
-    const sales = salesData.length > 0 ? salesData : filteredHistSales;
-    const expenses = (expensesData.length > 0 ? expensesData : filteredHistExpenses) as CashFlow[];
+    // Combine Supabase data with historical seed data
+    const combinedSales = [...filteredHistSales];
+    salesData.forEach((sd) => {
+      if (!combinedSales.some((cs) => cs.id === sd.id)) {
+        combinedSales.push(sd);
+      }
+    });
+
+    const combinedExpenses = [...filteredHistExpenses];
+    expensesData.forEach((ed) => {
+      if (!combinedExpenses.some((ce) => ce.id === ed.id)) {
+        combinedExpenses.push(ed);
+      }
+    });
+
+    const sales = combinedSales;
+    const expenses = combinedExpenses as CashFlow[];
     const payments = paymentsData;
     const drivers = driversData.length > 0 ? driversData : HISTORICAL_DRIVERS;
     const clientsWithBalance = clientsData.length > 0 ? clientsData : HISTORICAL_CLIENTS;
@@ -293,7 +308,7 @@ export const financeService = {
       });
     });
 
-    // Fiao from historical clients per driver
+    // Fiao from clients per driver
     HISTORICAL_CLIENTS.forEach((hc) => {
       const targetDriver = Array.from(driverMap.values()).find(d => d.driverName.toLowerCase().includes(hc.driver.toLowerCase()));
       if (targetDriver) {
