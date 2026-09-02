@@ -32,7 +32,7 @@ export const userService = {
     const supabase = createClient();
     
     // Default password if not provided
-    const password = userData.password || 'Patria2026*';
+    const password = userData.password || '123456';
 
     // 1. Sign up user in Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -48,7 +48,6 @@ export const userService = {
     });
 
     if (authError) {
-      // If error is user already registered, or other error, return it
       return { data: null, error: authError };
     }
 
@@ -111,6 +110,11 @@ export const userService = {
   async resolveEmailFromIdentifier(identifier: string): Promise<string> {
     const trimmed = identifier.trim().toLowerCase();
     
+    // Direct mappings for owner & admin
+    if (trimmed === 'moretaerick' || trimmed === 'moretaerick12' || trimmed === 'erick' || trimmed === 'admin') {
+      return 'moretaerick12@gmail.com';
+    }
+
     // If it's already an email, return as is
     if (trimmed.includes('@')) {
       return trimmed;
@@ -126,8 +130,6 @@ export const userService = {
         .limit(1);
 
       if (data && data.length > 0) {
-        // If we have a matching name like 'nene' or 'joelito' or 'erick',
-        // check standard company pattern or return default mapped email
         const user = data[0];
         const sanitized = (user.first_name || trimmed).toLowerCase().replace(/\s+/g, '');
         return `${sanitized}@pastelitos.com`;

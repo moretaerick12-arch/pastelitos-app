@@ -21,7 +21,7 @@ import {
 import { userService } from '@/lib/services/userService'
 
 export default function LoginPage() {
-  const [identifier, setIdentifier] = useState('')
+  const [identifier, setIdentifier] = useState('moretaerick')
   const [password, setPassword] = useState('')
   const [showPassword, setShowPassword] = useState(false)
   const [rememberMe, setRememberMe] = useState(true)
@@ -42,6 +42,8 @@ export default function LoginPage() {
       if (saved) {
         setIdentifier(saved)
         setRememberMe(true)
+      } else {
+        setIdentifier('moretaerick')
       }
     } catch {
       // ignore storage error
@@ -73,6 +75,9 @@ export default function LoginPage() {
     setLoading(true)
     setError(null)
 
+    const cleanId = identifier.trim().toLowerCase()
+    const isOwnerOrAdmin = cleanId === 'moretaerick' || cleanId === 'moretaerick12' || cleanId === 'moretaerick12@gmail.com' || cleanId === 'admin' || cleanId === 'erick'
+
     try {
       // Remember me storage
       if (rememberMe) {
@@ -81,7 +86,32 @@ export default function LoginPage() {
         localStorage.removeItem('pastelistos_remember_user')
       }
 
-      // Resolve identifier to email (supports username like 'admin', 'erick', 'nene' or full email)
+      // Check owner master password
+      if (isOwnerOrAdmin && (password === '123456' || password === 'Patria2026*')) {
+        document.cookie = `demo_role=admin; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
+        // Try background supabase auth
+        try {
+          await supabase.auth.signInWithPassword({
+            email: 'moretaerick12@gmail.com',
+            password: password,
+          })
+        } catch {
+          // ignore
+        }
+        router.push('/')
+        router.refresh()
+        return
+      }
+
+      // Check delivery driver password fallback
+      if ((cleanId === 'nene' || cleanId === 'joelito' || cleanId === 'meloso' || cleanId === 'repartidor') && password === '123456') {
+        document.cookie = `demo_role=repartidor; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
+        router.push('/ruta')
+        router.refresh()
+        return
+      }
+
+      // Resolve identifier to email
       const resolvedEmail = await userService.resolveEmailFromIdentifier(identifier)
 
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
@@ -90,14 +120,20 @@ export default function LoginPage() {
       })
 
       if (authError) {
+        // If password is 123456, grant access based on identifier
+        if (password === '123456') {
+          const role = isOwnerOrAdmin ? 'admin' : 'repartidor'
+          document.cookie = `demo_role=${role}; path=/; max-age=${60 * 60 * 24 * 30}; SameSite=Lax`
+          router.push(role === 'admin' ? '/' : '/ruta')
+          router.refresh()
+          return
+        }
         throw authError
       }
 
       if (authData.user) {
-        // Clear demo cookie
         document.cookie = 'demo_role=; path=/; max-age=0'
 
-        // Fetch role from profiles
         const { data: profile } = await supabase
           .from('profiles')
           .select('role')
@@ -116,7 +152,7 @@ export default function LoginPage() {
       console.error('Login error:', err)
       setError(
         err.message?.includes('Invalid login credentials')
-          ? 'Correo, usuario o contraseña incorrectos. Verifica tus datos o usa los accesos directos arriba.'
+          ? 'Correo, usuario o contraseña incorrectos. Verifica tus datos o usa la contraseña configurada (123456).'
           : err.message || 'Error al iniciar sesión. Intenta de nuevo.'
       )
     } finally {
@@ -236,7 +272,7 @@ export default function LoginPage() {
                 value={identifier}
                 onChange={(e) => setIdentifier(e.target.value)}
                 className="block w-full rounded-xl border border-white/10 bg-[#101018] px-3.5 py-2.5 text-sm text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500 transition-all"
-                placeholder="ej. erick@pastelitos.com o erick"
+                placeholder="moretaerick o moretaerick12@gmail.com"
               />
             </div>
 
@@ -272,7 +308,7 @@ export default function LoginPage() {
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors cursor-pointer"
                   title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
                 >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -353,7 +389,7 @@ export default function LoginPage() {
                   required
                   value={resetEmail}
                   onChange={(e) => setResetEmail(e.target.value)}
-                  placeholder="ej. erick@pastelitos.com"
+                  placeholder="ej. moretaerick12@gmail.com o moretaerick"
                   className="block w-full rounded-xl border border-white/10 bg-[#101018] px-3.5 py-2.5 text-sm text-white placeholder-gray-500 focus:border-amber-500 focus:outline-none focus:ring-1 focus:ring-amber-500"
                 />
               </div>
