@@ -5,23 +5,34 @@ export async function middleware(request: NextRequest) {
   const { supabaseResponse, user, supabase } = await updateSession(request)
 
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login')
-  
-  if (!user && !isAuthRoute) {
+  const demoRole = request.cookies.get('demo_role')?.value
+
+  // If not logged in and no demo role, redirect to login
+  if (!user && !demoRole && !isAuthRoute) {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = '/login'
     return NextResponse.redirect(redirectUrl)
   }
 
-  if (user) {
-    // Check user role from profiles table
-    const { data: profile } = await supabase
-        .from('profiles')
-        .select('role')
-        .eq('id', user.id)
-        .single();
-        
-    const role = profile?.role || 'repartidor'; // Default fallback
-    
+  if (user || demoRole) {
+    let role = demoRole || 'repartidor'
+
+    if (user) {
+      // Check user role from profiles table
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('role')
+          .eq('id', user.id)
+          .single()
+        if (profile?.role) {
+          role = profile.role
+        }
+      } catch {
+        // keep fallback
+      }
+    }
+
     // Redirect authenticated users away from login
     if (isAuthRoute) {
       const redirectUrl = request.nextUrl.clone()
@@ -29,25 +40,18 @@ export async function middleware(request: NextRequest) {
       return NextResponse.redirect(redirectUrl)
     }
 
-    // Since admin is at /, we check if they are trying to access /ruta as admin
+    // Since admin is at /, redirect admin from /ruta to /
     if (request.nextUrl.pathname.startsWith('/ruta') && role !== 'repartidor') {
       const redirectUrl = request.nextUrl.clone()
       redirectUrl.pathname = '/'
       return NextResponse.redirect(redirectUrl)
     }
 
-    // Since delivery might try to access /, redirect to /ruta
+    // Since delivery is at /ruta, redirect from / to /ruta
     if (request.nextUrl.pathname === '/' && role !== 'admin') {
       const redirectUrl = request.nextUrl.clone()
       redirectUrl.pathname = '/ruta'
       return NextResponse.redirect(redirectUrl)
-    }
-    
-    // Generic check for any specific /admin/... routes if they exist
-    if (request.nextUrl.pathname.startsWith('/admin') && role !== 'admin') {
-        const redirectUrl = request.nextUrl.clone()
-        redirectUrl.pathname = '/ruta'
-        return NextResponse.redirect(redirectUrl)
     }
   }
 

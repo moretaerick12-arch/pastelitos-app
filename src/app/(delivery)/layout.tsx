@@ -104,8 +104,9 @@ export default function DeliveryLayout({
   }, [supabase, router]);
 
   const handleLogout = async () => {
+    document.cookie = 'demo_role=; path=/; max-age=0';
     await supabase.auth.signOut();
-    router.push('/');
+    router.push('/login');
   };
 
   const navItems = [

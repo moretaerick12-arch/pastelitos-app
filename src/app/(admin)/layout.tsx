@@ -21,6 +21,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const router = useRouter();
 
   const handleLogout = async () => {
+    document.cookie = 'demo_role=; path=/; max-age=0';
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push('/login');
