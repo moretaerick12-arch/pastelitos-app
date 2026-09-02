@@ -2,9 +2,26 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl
+
+  // Ignore static assets, PWA manifest, and service worker
+  if (
+    pathname.startsWith('/_next') ||
+    pathname === '/manifest.json' ||
+    pathname === '/sw.js' ||
+    pathname === '/favicon.ico' ||
+    pathname.endsWith('.png') ||
+    pathname.endsWith('.svg') ||
+    pathname.endsWith('.ico') ||
+    pathname.endsWith('.json') ||
+    pathname.endsWith('.js')
+  ) {
+    return NextResponse.next()
+  }
+
   const { supabaseResponse, user, supabase } = await updateSession(request)
 
-  const isAuthRoute = request.nextUrl.pathname.startsWith('/login')
+  const isAuthRoute = pathname.startsWith('/login') || pathname.startsWith('/reset-password')
   const demoRole = request.cookies.get('demo_role')?.value
 
   // If not logged in and no demo role, redirect to login
@@ -18,7 +35,6 @@ export async function middleware(request: NextRequest) {
     let role = demoRole || 'repartidor'
 
     if (user) {
-      // Check user role from profiles table
       try {
         const { data: profile } = await supabase
           .from('profiles')
@@ -41,14 +57,14 @@ export async function middleware(request: NextRequest) {
     }
 
     // Since admin is at /, redirect admin from /ruta to /
-    if (request.nextUrl.pathname.startsWith('/ruta') && role !== 'repartidor') {
+    if (pathname.startsWith('/ruta') && role !== 'repartidor') {
       const redirectUrl = request.nextUrl.clone()
       redirectUrl.pathname = '/'
       return NextResponse.redirect(redirectUrl)
     }
 
     // Since delivery is at /ruta, redirect from / to /ruta
-    if (request.nextUrl.pathname === '/' && role !== 'admin') {
+    if (pathname === '/' && role !== 'admin') {
       const redirectUrl = request.nextUrl.clone()
       redirectUrl.pathname = '/ruta'
       return NextResponse.redirect(redirectUrl)
@@ -60,13 +76,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * Feel free to modify this pattern to include more paths.
-     */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|manifest.json|sw.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp|json|js)$).*)',
   ],
 }
